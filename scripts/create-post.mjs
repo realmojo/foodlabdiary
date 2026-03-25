@@ -115,6 +115,7 @@ async function ollamaGenerate(prompt) {
     model: MODEL,
     prompt,
     options: { temperature: 0.7, num_predict: 8192 },
+    keep_alive: "15m",
   })
   return response.response || ""
 }
@@ -221,7 +222,7 @@ ${originalText}
 
 중요: 반드시 3500자 이상 작성하세요. 짧게 쓰면 안 됩니다. 각 섹션을 충분히 상세하게 서술하세요.`
 
-  log("🤖", "Ollama gemma3 재창작 요청 중... (최대 5분 소요)")
+  log("🤖", "Ollama gemma3 재창작 요청 중... (최대 15분 소요)")
   const response = await ollamaGenerate(prompt)
 
   // 파싱

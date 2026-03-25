@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx:*)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__get_cost",
+      "mcp__claude_ai_Supabase__confirm_cost",
+      "mcp__claude_ai_Supabase__create_project",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "mcp__claude_ai_Supabase__get_project_url",
+      "mcp__claude_ai_Supabase__get_publishable_keys",
+      "Bash(npm install:*)",
+      "WebFetch(domain:petniverse.co.kr)",
+      "Bash(aws sts:*)",
+      "Bash(npm list:*)",
+      "Bash(source .env.local)",
+      "Bash(AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY AWS_REGION=$AWS_REGION node scripts/upload-images.mjs)",
+      "Bash(curl:*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(''''count:'''', len\\(d\\)\\); print\\(''''author:'''', d[0].get\\(''''author''''\\)\\); print\\(''''category:'''', d[0].get\\(''''primary_category''''\\)\\)\")",
+      "Bash(ollama list:*)",
+      "Bash(node scripts/create-post.mjs \"https://petniverse.co.kr/%ec%9d%b4-%ec%a0%95%eb%8f%84%eb%8a%94-%ea%b4%9c%ec%b0%ae%ea%b2%a0%ec%a7%80-%ed%95%98%ec%a7%80%eb%a7%8c-%eb%b0%98%eb%a0%a4%eb%8f%99%eb%ac%bc%ec%9d%80-%eb%b2%8c%ec%8d%a8-%ec%b6%94%ec%9b%8c%ed%95%98/\" dogs)",
+      "Bash(node:*)",
+      "Bash(find /Users/gshs/Desktop/m/pawpaw -type f -name robots.* -o -name sitemap.* -o -name *feed* -o -name *opengraph* -o -name *twitter*)",
+      "Bash(find /Users/gshs/Desktop/m/pawpaw/app -name *opengraph* -o -name *twitter* -o -name *image*)",
+      "Bash(grep -r robots /Users/gshs/Desktop/m/pawpaw/app --include=*.ts --include=*.tsx)",
+      "Bash(ls -la /Users/gshs/Desktop/m/pawpaw/*.ts /Users/gshs/Desktop/m/pawpaw/*.tsx /Users/gshs/Desktop/m/pawpaw/*.json)",
+      "Bash(grep -r \"generateMetadata\\\\|Metadata\\\\|openGraph\\\\|twitter\" /Users/gshs/Desktop/m/pawpaw/app --include=*.tsx --include=*.ts)",
+      "Bash(find /Users/gshs/Desktop/m/pawpaw/components -type f -name *.tsx -o -name *.ts)",
+      "Bash(git status:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git remote:*)",
+      "Bash(git branch:*)"
+    ]
+  }
+}
