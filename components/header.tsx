@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { getCategories } from "@/lib/data"
+import { MobileNav } from "./mobile-nav"
 
 export async function Header() {
   const categories = await getCategories()
@@ -25,7 +26,9 @@ export async function Header() {
           </svg>
           <span>포우포우</span>
         </Link>
-        <nav className="flex items-center gap-1">
+
+        {/* 데스크톱 내비게이션 */}
+        <nav className="hidden items-center gap-1 lg:flex">
           {categories.slice(0, 4).map((cat) => (
             <Link
               key={cat.slug}
@@ -36,6 +39,9 @@ export async function Header() {
             </Link>
           ))}
         </nav>
+
+        {/* 모바일 메뉴 */}
+        <MobileNav categories={categories} />
       </div>
     </header>
   )

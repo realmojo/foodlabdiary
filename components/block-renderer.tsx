@@ -8,22 +8,16 @@ export function BlockRenderer({ blocks }: { blocks: ContentBlock[] }) {
         switch (block.type) {
           case "paragraph":
             return (
-              <p key={i} className="leading-[1.8] text-foreground/80">
-                {block.text}
-              </p>
+              <p key={i} className="leading-[1.8] text-foreground/80" dangerouslySetInnerHTML={{ __html: block.text ?? "" }} />
             )
           case "heading":
             if (block.level === 3) {
               return (
-                <h3 key={i} className="mt-8 mb-2 text-lg font-semibold text-foreground">
-                  {block.text}
-                </h3>
+                <h3 key={i} className="mt-8 mb-2 text-lg font-semibold text-foreground" dangerouslySetInnerHTML={{ __html: block.text ?? "" }} />
               )
             }
             return (
-              <h2 key={i} className="mt-10 mb-3 text-xl font-bold text-foreground">
-                {block.text}
-              </h2>
+              <h2 key={i} className="mt-10 mb-3 text-xl font-bold text-foreground" dangerouslySetInnerHTML={{ __html: block.text ?? "" }} />
             )
           case "image":
             return (
@@ -49,21 +43,20 @@ export function BlockRenderer({ blocks }: { blocks: ContentBlock[] }) {
               <blockquote
                 key={i}
                 className="my-4 border-l-2 border-primary/40 pl-4 italic leading-[1.8] text-foreground/70"
-              >
-                {block.text}
-              </blockquote>
+                dangerouslySetInnerHTML={{ __html: block.text ?? "" }}
+              />
             )
           case "list":
             if (block.ordered) {
               return (
                 <ol key={i} className="my-3 list-decimal space-y-2 pl-6 leading-[1.8] text-foreground/80">
-                  {block.items?.map((item, j) => <li key={j}>{item}</li>)}
+                  {block.items?.map((item, j) => <li key={j} dangerouslySetInnerHTML={{ __html: item }} />)}
                 </ol>
               )
             }
             return (
               <ul key={i} className="my-3 list-disc space-y-2 pl-6 leading-[1.8] text-foreground/80">
-                {block.items?.map((item, j) => <li key={j}>{item}</li>)}
+                {block.items?.map((item, j) => <li key={j} dangerouslySetInnerHTML={{ __html: item }} />)}
               </ul>
             )
           default:

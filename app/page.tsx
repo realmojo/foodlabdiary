@@ -164,12 +164,12 @@ export default async function HomePage() {
       {/* ===== Category Section ===== */}
       <section className="mx-auto max-w-6xl px-4 py-8">
         {/* Category Tab Header */}
-        <div className="mb-6 flex items-center gap-1 border-b">
+        <div className="mb-6 flex items-center gap-1 overflow-x-auto border-b scrollbar-none">
           {categories.slice(0, 6).map((cat, idx) => (
             <Link
               key={cat.slug}
               href={`/${cat.slug}`}
-              className={`border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
+              className={`shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
                 idx === 0
                   ? "border-yellow-500 text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"

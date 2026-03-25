@@ -6,24 +6,11 @@ export async function Footer() {
 
   return (
     <footer className="border-t bg-muted/40">
-      {/* 편집 원칙 배너 */}
-      <div className="border-b bg-muted/60">
-        <div className="mx-auto flex max-w-5xl flex-col items-center gap-2 px-4 py-6 text-center">
-          <p className="text-sm font-semibold text-foreground">
-            수의학적 근거 기반 · 전문가 검수 완료 · 보호자 중심 콘텐츠
-          </p>
-          <p className="max-w-xl text-xs text-muted-foreground">
-            포우포우의 모든 콘텐츠는 수의사 및 반려동물 전문가의 검수를 거쳐
-            발행됩니다. 의학적 진단이나 치료를 대체하지 않으며, 정확한 진료는
-            담당 수의사와 상담하시기 바랍니다.
-          </p>
-        </div>
-      </div>
-
       <div className="mx-auto max-w-5xl px-4 py-10">
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        {/* 상단: 브랜드 + 링크 그리드 */}
+        <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr_auto_auto]">
           {/* 브랜드 */}
-          <div className="sm:col-span-2 lg:col-span-1">
+          <div>
             <Link href="/" className="flex items-center gap-2 font-bold tracking-tight">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -44,9 +31,8 @@ export async function Footer() {
             </Link>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               반려동물과 함께하는 더 나은 일상을 위한 정보 매거진.
-              수의사, 훈련사, 영양 컨설턴트가 함께 만듭니다.
             </p>
-            <div className="mt-4 space-y-1 text-xs text-muted-foreground">
+            <div className="mt-3 space-y-1 text-xs text-muted-foreground">
               <p>
                 <span className="font-medium text-foreground">일반 문의</span>{" "}
                 hello@petpawpaw.net
@@ -58,15 +44,15 @@ export async function Footer() {
             </div>
           </div>
 
-          {/* 카테고리 */}
+          {/* 카테고리 — 모바일: 가로 칩, 데스크톱: 세로 리스트 */}
           <div>
             <h3 className="mb-3 text-sm font-semibold">카테고리</h3>
-            <ul className="space-y-2">
+            <ul className="flex flex-wrap gap-2 lg:flex-col lg:gap-2">
               {categories.map((cat) => (
                 <li key={cat.slug}>
                   <Link
                     href={`/${cat.slug}`}
-                    className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    className="inline-block rounded-full border px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:rounded-none lg:border-0 lg:px-0 lg:py-0 lg:text-sm"
                   >
                     {cat.emoji} {cat.name}
                   </Link>
@@ -75,23 +61,18 @@ export async function Footer() {
             </ul>
           </div>
 
-          {/* 서비스 안내 */}
+          {/* 서비스 */}
           <div>
             <h3 className="mb-3 text-sm font-semibold">서비스</h3>
             <ul className="space-y-2">
               <li>
                 <Link href="/about" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
-                  소개 · 편집 원칙
+                  소개
                 </Link>
               </li>
               <li>
                 <Link href="/contact" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
                   문의하기
-                </Link>
-              </li>
-              <li>
-                <Link href="/contact" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
-                  전문가 기고 안내
                 </Link>
               </li>
             </ul>
@@ -115,13 +96,9 @@ export async function Footer() {
           </div>
         </div>
 
-        {/* 하단 저작권 및 면책 */}
-        <div className="mt-10 space-y-2 border-t pt-6 text-center text-xs text-muted-foreground">
+        {/* 하단 저작권 */}
+        <div className="mt-10 border-t pt-6 text-center text-xs text-muted-foreground">
           <p>&copy; {new Date().getFullYear()} 포우포우(pawpaw). All rights reserved.</p>
-          <p>
-            본 사이트의 콘텐츠는 정보 제공 목적으로 작성되었으며 전문적인 수의학적
-            진단·처방을 대체하지 않습니다.
-          </p>
         </div>
       </div>
     </footer>

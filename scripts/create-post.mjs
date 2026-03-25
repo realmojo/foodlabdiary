@@ -28,8 +28,8 @@ import http from "http"
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
 import { createClient } from "@supabase/supabase-js"
 import { randomUUID } from "crypto"
-import path from "path"
 import { Ollama } from "ollama"
+import sharp from "sharp"
 
 // ─── Config ───────────────────────────────────────────
 const MODEL = "gemma3"
@@ -237,7 +237,44 @@ ${originalText}
   return { newTitle, newBody }
 }
 
+// ─── Step 2.5: 카테고리 자동 분류 ────────────────────
+
+async function detectCategory(title, paragraphs) {
+  const sample = paragraphs.slice(0, 5).join("\n")
+  const prompt = `아래 기사의 제목과 본문을 읽고, 가장 적합한 카테고리를 하나만 골라주세요.
+
+카테고리 목록:
+- dogs: 강아지 관련 (품종, 행동, 훈련, 강아지 건강 등)
+- cats: 고양이 관련 (품종, 행동, 고양이 건강 등)
+- health: 반려동물 전반의 건강/질병/의료
+- training: 훈련/교육/행동교정
+- nutrition: 사료/영양/간식/식단
+- lifestyle: 반려동물과의 생활/용품/여행/입양
+- animals: 기타 동물 (하마, 새, 파충류, 야생동물 등)
+
+규칙:
+- 반드시 위 목록 중 하나의 slug만 출력하세요.
+- 다른 텍스트 없이 slug만 출력하세요.
+
+제목: ${title}
+
+본문 일부:
+${sample}`
+
+  log("🏷️", "카테고리 자동 분류 중...")
+  const response = await ollamaGenerate(prompt)
+  const slug = response.trim().toLowerCase().replace(/[^a-z]/g, "")
+  const valid = ["dogs", "cats", "health", "training", "nutrition", "lifestyle", "animals"]
+  const detected = valid.find((v) => slug.includes(v)) || "lifestyle"
+  log("🏷️", `감지된 카테고리: ${detected}`)
+  return detected
+}
+
 // ─── Step 3: 마크다운 → 블록 변환 ─────────────────────
+
+function convertInlineMarkdown(text) {
+  return text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+}
 
 function markdownToBlocks(markdown, imageUrls) {
   const blocks = []
@@ -247,7 +284,7 @@ function markdownToBlocks(markdown, imageUrls) {
 
   function flushParagraph() {
     if (currentParagraph.length > 0) {
-      const text = currentParagraph.join(" ").trim()
+      const text = convertInlineMarkdown(currentParagraph.join(" ").trim())
       if (text.length > 0) {
         blocks.push({ type: "paragraph", text })
       }
@@ -261,7 +298,7 @@ function markdownToBlocks(markdown, imageUrls) {
     if (trimmed.startsWith("## ")) {
       flushParagraph()
       // 소제목 후에 이미지 삽입 (남은 이미지가 있으면)
-      blocks.push({ type: "heading", level: 2, text: trimmed.slice(3).trim() })
+      blocks.push({ type: "heading", level: 2, text: convertInlineMarkdown(trimmed.slice(3).trim()) })
       if (
         imageIndex < imageUrls.length &&
         blocks.filter((b) => b.type === "heading").length % 2 === 0
@@ -276,25 +313,25 @@ function markdownToBlocks(markdown, imageUrls) {
       }
     } else if (trimmed.startsWith("### ")) {
       flushParagraph()
-      blocks.push({ type: "heading", level: 3, text: trimmed.slice(4).trim() })
+      blocks.push({ type: "heading", level: 3, text: convertInlineMarkdown(trimmed.slice(4).trim()) })
     } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
       flushParagraph()
       // 리스트 아이템 수집
-      const items = [trimmed.slice(2).trim()]
+      const items = [convertInlineMarkdown(trimmed.slice(2).trim())]
       // peek ahead는 하지 않으므로 단일 아이템 리스트가 될 수 있음
       // 대신 이전 블록이 list면 합침
       const lastBlock = blocks[blocks.length - 1]
       if (lastBlock && lastBlock.type === "list" && !lastBlock.ordered) {
-        lastBlock.items.push(trimmed.slice(2).trim())
+        lastBlock.items.push(convertInlineMarkdown(trimmed.slice(2).trim()))
       } else {
         blocks.push({ type: "list", ordered: false, items })
       }
     } else if (/^\d+\.\s/.test(trimmed)) {
       flushParagraph()
-      const text = trimmed.replace(/^\d+\.\s/, "").trim()
+      const text = convertInlineMarkdown(trimmed.replace(/^\d+\.\s/, "").trim())
       const lastBlock = blocks[blocks.length - 1]
       if (lastBlock && lastBlock.type === "list" && lastBlock.ordered) {
-        lastBlock.items.push(text)
+        lastBlock.items.push(convertInlineMarkdown(text))
       } else {
         blocks.push({ type: "list", ordered: true, items: [text] })
       }
@@ -351,7 +388,44 @@ function markdownToBlocks(markdown, imageUrls) {
   return blocks
 }
 
-// ─── Step 4: S3 업로드 ────────────────────────────────
+// ─── Step 4: 이미지 분석 → 재생성 → S3 업로드 ───────
+
+async function analyzeImage(imageBuffer) {
+  const base64 = imageBuffer.toString("base64")
+  const response = await ollama.generate({
+    model: "llava",
+    prompt:
+      "Describe this image in detail for recreating it. Include subject, composition, colors, mood, background, and style. Be specific and vivid. Output only the description, nothing else.",
+    images: [base64],
+    options: { temperature: 0.3, num_predict: 512 },
+    keep_alive: "15m",
+  })
+  return response.response || ""
+}
+
+async function generateImage(description) {
+  const prompt = `Create a high-quality, original illustration: ${description}. Style: clean, modern, vibrant colors, professional pet magazine photography style.`
+  const response = await ollama.generate({
+    model: "x/z-image-turbo",
+    prompt,
+    options: { temperature: 0.8, num_predict: 4096 },
+    keep_alive: "15m",
+  })
+
+  // x/z-image-turbo returns base64 image in response.images
+  if (response.images && response.images.length > 0) {
+    return Buffer.from(response.images[0], "base64")
+  }
+
+  // fallback: check if response itself contains base64
+  const raw = response.response || ""
+  const b64Match = raw.match(/[A-Za-z0-9+/=]{100,}/)
+  if (b64Match) {
+    return Buffer.from(b64Match[0], "base64")
+  }
+
+  return null
+}
 
 async function uploadImagesToS3(imageUrls) {
   const now = new Date()
@@ -366,22 +440,41 @@ async function uploadImagesToS3(imageUrls) {
     )
 
     try {
-      const { buffer, contentType } = await fetchBuffer(url)
-      const ext = path.extname(new URL(url).pathname) || ".jpg"
-      const filename = `${randomUUID().slice(0, 8)}${ext}`
+      const { buffer } = await fetchBuffer(url)
+
+      // 1) llava로 원본 이미지 분석
+      log("🔍", `이미지 분석 중 (llava)...`)
+      const description = await analyzeImage(buffer)
+      log("📝", `분석 결과: ${description.slice(0, 100)}...`)
+
+      // 2) x/z-image-turbo로 새 이미지 생성
+      log("🎨", `새 이미지 생성 중 (x/z-image-turbo)...`)
+      const generatedBuffer = await generateImage(description)
+
+      // 생성 실패 시 원본 사용
+      const sourceBuffer = generatedBuffer || buffer
+      if (!generatedBuffer) {
+        log("⚠️", `이미지 생성 실패, 원본 이미지 사용`)
+      } else {
+        log("✅", `새 이미지 생성 완료 (${(generatedBuffer.length / 1024).toFixed(0)}KB)`)
+      }
+
+      // 3) webp 변환 후 S3 업로드
+      const webpBuffer = await sharp(sourceBuffer).webp({ quality: 80 }).toBuffer()
+      const filename = `${randomUUID().slice(0, 8)}.webp`
       const key = `${prefix}/${filename}`
 
       log(
         "☁️",
-        `S3 업로드: s3://${S3_BUCKET}/${key} (${(buffer.length / 1024).toFixed(0)}KB)`
+        `S3 업로드: s3://${S3_BUCKET}/${key} (${(sourceBuffer.length / 1024).toFixed(0)}KB → ${(webpBuffer.length / 1024).toFixed(0)}KB webp)`
       )
 
       await s3.send(
         new PutObjectCommand({
           Bucket: S3_BUCKET,
           Key: key,
-          Body: buffer,
-          ContentType: contentType,
+          Body: webpBuffer,
+          ContentType: "image/webp",
         })
       )
 
@@ -397,30 +490,33 @@ async function uploadImagesToS3(imageUrls) {
 
 // ─── Step 5: Supabase 삽입 ────────────────────────────
 
-function slugify(text) {
-  return (
-    text
+async function slugify(title) {
+  try {
+    const prompt = `Translate the following title to a short English URL slug (lowercase, hyphens only, max 6 words, no explanation, just the slug):\n"${title}"`
+    const raw = await ollamaGenerate(prompt)
+    const slug = raw
+      .trim()
       .toLowerCase()
-      .replace(/[가-힣]+/g, (match) => {
-        // 간단한 한글 → 로마자 변환 대신 랜덤 ID 사용
-        return ""
-      })
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || `post-${randomUUID().slice(0, 8)}`
-  )
+      .replace(/[^a-z0-9\-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+    if (slug && slug.length >= 3) return slug
+  } catch (e) {
+    console.warn("⚠️ slug 생성 실패, fallback 사용:", e.message)
+  }
+  return `post-${randomUUID().slice(0, 8)}`
 }
 
 async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
   // 작성자: 기본 에디터
   let { data: author } = await supabase
-    .from("authors")
+    .from("pawpaw_authors")
     .select("id")
     .eq("slug", "park-sooa")
     .single()
 
   if (!author) {
     const { data } = await supabase
-      .from("authors")
+      .from("pawpaw_authors")
       .insert({ name: "박수아", slug: "park-sooa", bio: "pawpaw 에디터" })
       .select("id")
       .single()
@@ -429,7 +525,7 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
 
   // 카테고리
   let { data: category } = await supabase
-    .from("categories")
+    .from("pawpaw_categories")
     .select("id, slug")
     .eq("slug", categorySlug || "dogs")
     .single()
@@ -437,7 +533,7 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
   if (!category) {
     // 기본 카테고리
     const { data } = await supabase
-      .from("categories")
+      .from("pawpaw_categories")
       .select("id, slug")
       .order("sort_order")
       .limit(1)
@@ -445,7 +541,7 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
     category = data
   }
 
-  const slug = slugify(title) || `post-${randomUUID().slice(0, 8)}`
+  const slug = await slugify(title)
   const featuredImage = s3Images.length > 0 ? s3Images[0] : null
 
   // 읽기 시간 계산
@@ -455,7 +551,7 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
   const readTime = `${Math.max(1, Math.round(totalChars / 500))}분`
 
   const { data: post, error } = await supabase
-    .from("posts")
+    .from("pawpaw_posts")
     .insert({
       title,
       slug,
@@ -476,7 +572,7 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
     if (error.code === "23505") {
       const retrySlug = `${slug}-${randomUUID().slice(0, 4)}`
       const { data: post2, error: err2 } = await supabase
-        .from("posts")
+        .from("pawpaw_posts")
         .insert({
           title,
           slug: retrySlug,
@@ -494,7 +590,7 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
       if (err2) throw err2
       // post_categories
       await supabase
-        .from("post_categories")
+        .from("pawpaw_post_categories")
         .insert({ post_id: post2.id, category_id: category.id })
       return post2
     }
@@ -503,7 +599,7 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
 
   // post_categories
   await supabase
-    .from("post_categories")
+    .from("pawpaw_post_categories")
     .insert({ post_id: post.id, category_id: category.id })
 
   return post
@@ -552,26 +648,29 @@ async function main() {
   const s3Images = await uploadImagesToS3(images)
   log("✅", `이미지 업로드 완료: ${s3Images.length}개\n`)
 
-  // Step 3: Gemma3로 재창작
+  // Step 3: 카테고리 자동 분류 (명시하지 않은 경우)
+  const finalCategory = categorySlug || await detectCategory(title, paragraphs)
+
+  // Step 4: Gemma3로 재창작
   const { newTitle, newBody } = await rewriteArticle(title, paragraphs)
   log("✅", `재창작 완료`)
   log("📄", `새 제목: ${newTitle}`)
   log("📝", `새 본문 길이: ${newBody.length}자\n`)
 
-  // Step 4: 블록 변환
+  // Step 5: 블록 변환
   const blocks = markdownToBlocks(newBody, s3Images)
   const excerpt =
     blocks.find((b) => b.type === "paragraph")?.text?.slice(0, 200) || ""
   log("🧱", `블록 변환 완료: ${blocks.length}개 블록\n`)
 
-  // Step 5: DB 삽입
+  // Step 6: DB 삽입
   log("💾", "Supabase DB 저장 중...")
   const post = await insertPost(
     newTitle,
     excerpt,
     blocks,
     s3Images,
-    categorySlug
+    finalCategory
   )
   log("✅", `DB 저장 완료!`)
 

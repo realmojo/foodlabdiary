@@ -1,10 +1,9 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowLeft, ChevronRight, Clock, User, Tag } from "lucide-react"
+import { Clock, User, Tag } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { PostCard } from "@/components/post-card"
 import { BlockRenderer } from "@/components/block-renderer"
 import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/json-ld"
 import Image from "next/image"
@@ -102,47 +101,71 @@ export default async function SlugPage({ params }: Props) {
 // ---- Category View ----
 
 async function CategoryView({ slug }: { slug: string }) {
-  const [category, categories] = await Promise.all([
-    getCategoryBySlug(slug),
-    getCategories(),
-  ])
+  const category = await getCategoryBySlug(slug)
 
   if (!category) notFound()
 
   const categoryPosts = await getPostsByCategory(category.id)
 
   return (
-    <div className="mx-auto max-w-5xl px-4">
-      <div className="py-4">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          홈으로
-        </Link>
-      </div>
+    <div className="mx-auto max-w-5xl px-4 py-4">
+      <BreadcrumbJsonLd items={[
+        { name: "홈", href: "/" },
+        { name: category.name, href: `/${slug}` },
+      ]} />
 
-      <section className="pb-8">
-        <div className="flex items-center gap-3">
-          <span className="text-4xl">{category.emoji}</span>
-          <div>
-            <h1 className="text-2xl font-bold">{category.name}</h1>
-            <p className="mt-1 text-muted-foreground">{category.description}</p>
-          </div>
-        </div>
-        <p className="mt-3 text-sm text-muted-foreground">
+      {/* 카테고리 헤더 */}
+      <section className="py-6">
+        <h1 className="text-xl font-bold">{category.emoji} {category.name}</h1>
+        {category.description && (
+          <p className="mt-1 text-sm text-muted-foreground">{category.description}</p>
+        )}
+        <p className="mt-2 text-xs text-muted-foreground">
           총 {categoryPosts.length}개의 포스트
         </p>
       </section>
 
-      <Separator />
-
-      <section className="py-8">
+      {/* 포스트 목록 */}
+      <section className="pb-8">
         {categoryPosts.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="divide-y">
             {categoryPosts.map((post) => (
-              <PostCard key={post.slug} post={post} />
+              <Link
+                key={post.slug}
+                href={`/${post.slug}`}
+                className="group flex gap-4 py-4"
+              >
+                <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded bg-muted sm:h-24 sm:w-36">
+                  {post.featured_image_url && (
+                    <Image
+                      src={post.featured_image_url}
+                      alt={post.title}
+                      fill
+                      className="object-cover"
+                      sizes="144px"
+                    />
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-col justify-center">
+                  <h3 className="line-clamp-2 text-sm font-semibold leading-snug group-hover:underline sm:text-base">
+                    {post.title}
+                  </h3>
+                  {post.excerpt && (
+                    <p className="mt-1 hidden text-sm text-muted-foreground line-clamp-1 sm:block">
+                      {post.excerpt}
+                    </p>
+                  )}
+                  <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+                    {post.author && <span>{post.author.name}</span>}
+                    {post.published_at && (
+                      <span>
+                        {new Date(post.published_at).toLocaleDateString("ko-KR")}
+                      </span>
+                    )}
+                    {post.read_time && <span>{post.read_time} 읽기</span>}
+                  </div>
+                </div>
+              </Link>
             ))}
           </div>
         ) : (
@@ -150,25 +173,6 @@ async function CategoryView({ slug }: { slug: string }) {
             아직 작성된 포스트가 없습니다.
           </p>
         )}
-      </section>
-
-      <Separator />
-
-      <section className="py-8">
-        <h2 className="mb-4 text-sm font-semibold">다른 카테고리</h2>
-        <div className="flex flex-wrap gap-2">
-          {categories
-            .filter((c) => c.slug !== slug)
-            .map((cat) => (
-              <Link
-                key={cat.slug}
-                href={`/${cat.slug}`}
-                className="rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-muted"
-              >
-                {cat.emoji} {cat.name}
-              </Link>
-            ))}
-        </div>
       </section>
     </div>
   )
@@ -247,7 +251,7 @@ async function PostView({
   // 추천 콘텐츠: 같은 카테고리 우선, 부족하면 최근 글로 채움 (최대 6개)
   const relatedSlugs = new Set(relatedPosts.map((p) => p.slug))
   const extraPosts = recentPosts.filter(
-    (p) => p.slug !== post.slug && !relatedSlugs.has(p.slug),
+    (p) => p.slug !== post.slug && !relatedSlugs.has(p.slug)
   )
   const recommendedPosts = [...relatedPosts, ...extraPosts].slice(0, 6)
 
@@ -263,30 +267,6 @@ async function PostView({
     <div className="mx-auto max-w-6xl px-4">
       <ArticleJsonLd post={post} />
       <BreadcrumbJsonLd items={breadcrumbItems} />
-
-      {/* Breadcrumb */}
-      <nav aria-label="breadcrumb" className="py-4">
-        <ol className="flex items-center gap-1 text-sm text-muted-foreground">
-          {breadcrumbItems.map((item, i) => {
-            const isLast = i === breadcrumbItems.length - 1
-            return (
-              <li key={item.href} className="flex items-center gap-1">
-                {i > 0 && <ChevronRight className="h-3 w-3" />}
-                {isLast ? (
-                  <span className="text-foreground line-clamp-1">{item.name}</span>
-                ) : (
-                  <Link
-                    href={item.href}
-                    className="transition-colors hover:text-foreground"
-                  >
-                    {item.name}
-                  </Link>
-                )}
-              </li>
-            )
-          })}
-        </ol>
-      </nav>
 
       {/* PC: 본문 + 사이드바 / 모바일: 본문 → 사이드바 */}
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_280px]">
@@ -386,7 +366,7 @@ async function PostView({
                         {rp.primary_category.emoji} {rp.primary_category.name}
                       </span>
                     )}
-                    <h3 className="text-sm font-semibold leading-snug group-hover:underline line-clamp-2">
+                    <h3 className="line-clamp-2 text-sm leading-snug font-semibold group-hover:underline">
                       {rp.title}
                     </h3>
                     <span className="mt-1 text-xs text-muted-foreground">
