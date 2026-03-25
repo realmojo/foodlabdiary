@@ -4,6 +4,7 @@ import { Separator } from "@/components/ui/separator"
 export const metadata: Metadata = {
   title: "개인정보처리방침",
   description: "pawpaw 개인정보처리방침",
+  alternates: { canonical: "/privacy" },
 }
 
 export default function PrivacyPage() {

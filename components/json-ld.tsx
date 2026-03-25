@@ -4,11 +4,15 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://petpawpaw.net"
 
 const PUBLISHER = {
   "@type": "Organization" as const,
+  "@id": `${SITE_URL}/#organization`,
   name: "포우포우",
   url: SITE_URL,
   logo: {
     "@type": "ImageObject" as const,
+    "@id": `${SITE_URL}/#logo`,
     url: `${SITE_URL}/icon.svg`,
+    width: 512,
+    height: 512,
   },
   sameAs: [],
 }
@@ -16,13 +20,40 @@ const PUBLISHER = {
 export function WebsiteJsonLd() {
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: "포우포우",
-    url: SITE_URL,
-    description:
-      "강아지, 고양이, 반려동물과 함께하는 더 나은 일상을 위한 정보 매거진",
-    inLanguage: "ko-KR",
-    publisher: PUBLISHER,
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${SITE_URL}/#organization`,
+        name: "포우포우",
+        url: SITE_URL,
+        logo: {
+          "@type": "ImageObject",
+          "@id": `${SITE_URL}/#logo`,
+          url: `${SITE_URL}/icon.svg`,
+          width: 512,
+          height: 512,
+        },
+        sameAs: [],
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${SITE_URL}/#website`,
+        name: "포우포우",
+        url: SITE_URL,
+        description:
+          "강아지, 고양이, 반려동물과 함께하는 더 나은 일상을 위한 정보 매거진",
+        inLanguage: "ko-KR",
+        publisher: { "@id": `${SITE_URL}/#organization` },
+        potentialAction: {
+          "@type": "SearchAction",
+          target: {
+            "@type": "EntryPoint",
+            urlTemplate: `${SITE_URL}/?s={search_term_string}`,
+          },
+          "query-input": "required name=search_term_string",
+        },
+      },
+    ],
   }
 
   return (
@@ -38,28 +69,40 @@ export function ArticleJsonLd({ post }: { post: Post }) {
     .filter((b: ContentBlock) => b.type === "heading" && b.text)
     .map((b: ContentBlock) => b.text!)
 
+  const postUrl = `${SITE_URL}/${post.slug}`
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Article",
+    "@id": `${postUrl}/#article`,
     headline: post.title,
     description: post.excerpt,
-    url: `${SITE_URL}/${post.slug}`,
+    url: postUrl,
     datePublished: post.published_at,
     dateModified: post.updated_at,
-    image: post.featured_image_url || undefined,
+    image: post.featured_image_url
+      ? {
+          "@type": "ImageObject",
+          url: post.featured_image_url,
+        }
+      : undefined,
     author: post.author
       ? {
           "@type": "Person",
           name: post.author.name,
         }
       : undefined,
-    publisher: PUBLISHER,
+    publisher: { "@id": `${SITE_URL}/#organization` },
+    isPartOf: { "@id": `${SITE_URL}/#website` },
     mainEntityOfPage: {
       "@type": "WebPage",
-      "@id": `${SITE_URL}/${post.slug}`,
+      "@id": postUrl,
     },
     articleSection: post.primary_category?.name,
     inLanguage: "ko-KR",
+    wordCount: post.content
+      .filter((b: ContentBlock) => b.type === "paragraph" && b.text)
+      .reduce((sum: number, b: ContentBlock) => sum + (b.text?.length ?? 0), 0),
     keywords: [
       post.primary_category?.name,
       ...(post.categories?.map((c) => c.name) ?? []),

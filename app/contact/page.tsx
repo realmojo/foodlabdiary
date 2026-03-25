@@ -7,6 +7,7 @@ import { FAQJsonLd } from "@/components/json-ld"
 export const metadata: Metadata = {
   title: "문의하기",
   description: "pawpaw에 문의사항, 제안, 광고 협업 등을 보내주세요.",
+  alternates: { canonical: "/contact" },
 }
 
 export default function ContactPage() {

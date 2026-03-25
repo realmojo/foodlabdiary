@@ -244,13 +244,9 @@ async function detectCategory(title, paragraphs) {
   const prompt = `아래 기사의 제목과 본문을 읽고, 가장 적합한 카테고리를 하나만 골라주세요.
 
 카테고리 목록:
-- dogs: 강아지 관련 (품종, 행동, 훈련, 강아지 건강 등)
-- cats: 고양이 관련 (품종, 행동, 고양이 건강 등)
-- health: 반려동물 전반의 건강/질병/의료
-- training: 훈련/교육/행동교정
-- nutrition: 사료/영양/간식/식단
-- lifestyle: 반려동물과의 생활/용품/여행/입양
-- animals: 기타 동물 (하마, 새, 파충류, 야생동물 등)
+- dogs: 강아지 관련 (품종, 행동, 훈련, 건강, 사료, 용품 등)
+- cats: 고양이 관련 (품종, 행동, 건강, 사료, 용품 등)
+- animals: 기타 동물 및 반려동물 전반 (하마, 새, 파충류, 야생동물, 여러 동물 공통 주제 등)
 
 규칙:
 - 반드시 위 목록 중 하나의 slug만 출력하세요.
@@ -263,9 +259,12 @@ ${sample}`
 
   log("🏷️", "카테고리 자동 분류 중...")
   const response = await ollamaGenerate(prompt)
-  const slug = response.trim().toLowerCase().replace(/[^a-z]/g, "")
-  const valid = ["dogs", "cats", "health", "training", "nutrition", "lifestyle", "animals"]
-  const detected = valid.find((v) => slug.includes(v)) || "lifestyle"
+  const slug = response
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, "")
+  const valid = ["dogs", "cats", "animals"]
+  const detected = valid.find((v) => slug.includes(v)) || "animals"
   log("🏷️", `감지된 카테고리: ${detected}`)
   return detected
 }
@@ -298,7 +297,11 @@ function markdownToBlocks(markdown, imageUrls) {
     if (trimmed.startsWith("## ")) {
       flushParagraph()
       // 소제목 후에 이미지 삽입 (남은 이미지가 있으면)
-      blocks.push({ type: "heading", level: 2, text: convertInlineMarkdown(trimmed.slice(3).trim()) })
+      blocks.push({
+        type: "heading",
+        level: 2,
+        text: convertInlineMarkdown(trimmed.slice(3).trim()),
+      })
       if (
         imageIndex < imageUrls.length &&
         blocks.filter((b) => b.type === "heading").length % 2 === 0
@@ -313,7 +316,11 @@ function markdownToBlocks(markdown, imageUrls) {
       }
     } else if (trimmed.startsWith("### ")) {
       flushParagraph()
-      blocks.push({ type: "heading", level: 3, text: convertInlineMarkdown(trimmed.slice(4).trim()) })
+      blocks.push({
+        type: "heading",
+        level: 3,
+        text: convertInlineMarkdown(trimmed.slice(4).trim()),
+      })
     } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
       flushParagraph()
       // 리스트 아이템 수집
@@ -391,7 +398,9 @@ function markdownToBlocks(markdown, imageUrls) {
 // ─── Step 4: 이미지 분석 → 재생성 → S3 업로드 ───────
 
 async function analyzeImage(imageBuffer) {
-  const base64 = imageBuffer.toString("base64")
+  // webp 등 다양한 포맷을 llava가 처리할 수 있도록 JPEG로 변환
+  const jpegBuffer = await sharp(imageBuffer).jpeg({ quality: 85 }).toBuffer()
+  const base64 = jpegBuffer.toString("base64")
   const response = await ollama.generate({
     model: "llava",
     prompt:
@@ -401,6 +410,12 @@ async function analyzeImage(imageBuffer) {
     keep_alive: "15m",
   })
   return response.response || ""
+}
+
+async function unloadModel(model) {
+  try {
+    await ollama.generate({ model, prompt: "", keep_alive: 0 })
+  } catch {}
 }
 
 async function generateImage(description) {
@@ -432,41 +447,90 @@ async function uploadImagesToS3(imageUrls) {
   const prefix = `posts/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}`
   const uploaded = []
 
+  // ── Phase 1: 모든 이미지 다운로드 ──
+  const downloads = []
   for (let i = 0; i < imageUrls.length; i++) {
     const url = imageUrls[i]
     log(
       "📸",
       `이미지 다운로드 중 (${i + 1}/${imageUrls.length}): ${url.slice(0, 80)}...`
     )
-
     try {
       const { buffer } = await fetchBuffer(url)
+      log("✅", `다운로드 완료 (${(buffer.length / 1024).toFixed(0)}KB)`)
+      downloads.push({ buffer, index: i })
+    } catch (err) {
+      log("⚠️", `이미지 다운로드 실패: ${err.message}`)
+    }
+  }
 
-      // 1) llava로 원본 이미지 분석
-      log("🔍", `이미지 분석 중 (llava)...`)
-      const description = await analyzeImage(buffer)
-      log("📝", `분석 결과: ${description.slice(0, 100)}...`)
+  // gemma3 언로드 → VRAM 확보 (텍스트 생성/분류/slug에서 사용 후 남아있음)
+  log("🔄", `gemma3 모델 언로드 중...`)
+  await unloadModel(MODEL)
 
-      // 2) x/z-image-turbo로 새 이미지 생성
-      log("🎨", `새 이미지 생성 중 (x/z-image-turbo)...`)
-      const generatedBuffer = await generateImage(description)
+  // ── Phase 2: llava로 모든 이미지 분석 ──
+  log("🔍", `llava 모델로 ${downloads.length}개 이미지 분석 시작...`)
+  const descriptions = []
+  for (const { buffer, index } of downloads) {
+    log("🔍", `이미지 분석 중 (${index + 1}/${imageUrls.length})...`)
+    try {
+      const desc = await analyzeImage(buffer)
+      log("📝", `분석 완료: ${desc.slice(0, 100)}...`)
+      descriptions.push({ buffer, description: desc, index })
+    } catch (err) {
+      log("⚠️", `이미지 분석 실패, 원본 사용: ${err.message}`)
+      descriptions.push({ buffer, description: null, index })
+    }
+  }
 
-      // 생성 실패 시 원본 사용
-      const sourceBuffer = generatedBuffer || buffer
-      if (!generatedBuffer) {
-        log("⚠️", `이미지 생성 실패, 원본 이미지 사용`)
-      } else {
-        log("✅", `새 이미지 생성 완료 (${(generatedBuffer.length / 1024).toFixed(0)}KB)`)
+  // llava 언로드 → VRAM 확보
+  log("🔄", `llava 모델 언로드 중...`)
+  await unloadModel("llava")
+
+  // ── Phase 3: x/z-image-turbo로 모든 이미지 생성 ──
+  log(
+    "🎨",
+    `x/z-image-turbo 모델로 ${descriptions.length}개 이미지 생성 시작...`
+  )
+  const results = []
+  for (const { buffer, description, index } of descriptions) {
+    if (description) {
+      log("🎨", `이미지 생성 중 (${index + 1}/${imageUrls.length})...`)
+      try {
+        const generatedBuffer = await generateImage(description)
+        if (generatedBuffer) {
+          log(
+            "✅",
+            `생성 완료 (${(generatedBuffer.length / 1024).toFixed(0)}KB)`
+          )
+          results.push({ buffer: generatedBuffer, index })
+          continue
+        }
+      } catch (err) {
+        log("⚠️", `이미지 생성 실패: ${err.message}`)
       }
+    }
+    // fallback: 원본 사용
+    log("⚠️", `원본 이미지 사용 (${index + 1})`)
+    results.push({ buffer, index })
+  }
 
-      // 3) webp 변환 후 S3 업로드
-      const webpBuffer = await sharp(sourceBuffer).webp({ quality: 80 }).toBuffer()
+  // x/z-image-turbo 언로드 → VRAM 확보
+  log("🔄", `x/z-image-turbo 모델 언로드 중...`)
+  await unloadModel("x/z-image-turbo")
+
+  // ── Phase 4: webp 변환 → S3 업로드 ──
+  for (const { buffer: sourceBuffer, index } of results) {
+    try {
+      const webpBuffer = await sharp(sourceBuffer)
+        .webp({ quality: 80 })
+        .toBuffer()
       const filename = `${randomUUID().slice(0, 8)}.webp`
       const key = `${prefix}/${filename}`
 
       log(
         "☁️",
-        `S3 업로드: s3://${S3_BUCKET}/${key} (${(sourceBuffer.length / 1024).toFixed(0)}KB → ${(webpBuffer.length / 1024).toFixed(0)}KB webp)`
+        `S3 업로드 (${index + 1}/${imageUrls.length}): s3://${S3_BUCKET}/${key} (${(sourceBuffer.length / 1024).toFixed(0)}KB → ${(webpBuffer.length / 1024).toFixed(0)}KB webp)`
       )
 
       await s3.send(
@@ -617,9 +681,7 @@ async function main() {
       "예시:   node scripts/create-post.mjs https://example.com/article dogs"
     )
     console.log("")
-    console.log(
-      "카테고리: dogs, cats, health, training, nutrition, lifestyle, animals"
-    )
+    console.log("카테고리: dogs, cats, animals")
     process.exit(1)
   }
 
@@ -649,7 +711,8 @@ async function main() {
   log("✅", `이미지 업로드 완료: ${s3Images.length}개\n`)
 
   // Step 3: 카테고리 자동 분류 (명시하지 않은 경우)
-  const finalCategory = categorySlug || await detectCategory(title, paragraphs)
+  const finalCategory =
+    categorySlug || (await detectCategory(title, paragraphs))
 
   // Step 4: Gemma3로 재창작
   const { newTitle, newBody } = await rewriteArticle(title, paragraphs)

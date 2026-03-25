@@ -4,6 +4,7 @@ import { Separator } from "@/components/ui/separator"
 export const metadata: Metadata = {
   title: "이용약관",
   description: "pawpaw 서비스 이용약관",
+  alternates: { canonical: "/terms" },
 }
 
 export default function TermsPage() {

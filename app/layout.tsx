@@ -6,6 +6,7 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { PwaInstall } from "@/components/pwa-install"
 import { cn } from "@/lib/utils"
 
 const notoSans = Noto_Sans({ subsets: ["latin"], variable: "--font-sans" })
@@ -76,6 +77,12 @@ export default function RootLayout({
       )}
     >
       <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#F59E0B" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="포우포우" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
         <link rel="author" href="/about" />
         <link
           rel="alternate"
@@ -108,7 +115,11 @@ if(window.wcs) { wcs_do(); }`}
           <Header />
           <main className="flex-1">{children}</main>
           <Footer />
+          <PwaInstall />
         </ThemeProvider>
+        <Script id="sw-register" strategy="afterInteractive">
+          {`if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}`}
+        </Script>
       </body>
     </html>
   )

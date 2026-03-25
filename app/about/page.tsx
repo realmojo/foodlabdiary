@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator"
 export const metadata: Metadata = {
   title: "소개",
   description: "pawpaw는 반려동물과 함께하는 더 나은 일상을 위한 정보 매거진입니다.",
+  alternates: { canonical: "/about" },
 }
 
 export default function AboutPage() {
