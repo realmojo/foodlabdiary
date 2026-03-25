@@ -8,6 +8,7 @@ import { BlockRenderer } from "@/components/block-renderer"
 import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/json-ld"
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
+import { ShareButtons } from "@/components/share-buttons"
 import {
   getCategories,
   getCategoryBySlug,
@@ -55,15 +56,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const post = await getPostBySlug(slug)
   if (post) {
+    const plainExcerpt = post.excerpt?.replace(/<[^>]*>/g, "") ?? undefined
     return {
       title: post.title,
-      description: post.excerpt ?? undefined,
+      description: plainExcerpt,
       alternates: { canonical: `/${slug}` },
       openGraph: {
         title: post.title,
-        description: post.excerpt ?? undefined,
+        description: plainExcerpt,
         url: `${siteUrl}/${slug}`,
         type: "article",
+        siteName: "포우포우",
         publishedTime: post.published_at ?? undefined,
         authors: post.author?.name ? [post.author.name] : undefined,
         images: post.featured_image_url ? [post.featured_image_url] : undefined,
@@ -71,7 +74,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       twitter: {
         card: "summary_large_image",
         title: post.title,
-        description: post.excerpt ?? undefined,
+        description: plainExcerpt,
         images: post.featured_image_url ? [post.featured_image_url] : undefined,
       },
     }
@@ -320,13 +323,19 @@ async function PostView({
 
           <Separator />
 
-          <div className="flex items-center gap-2 py-6">
-            <Tag className="h-3.5 w-3.5 text-muted-foreground" />
-            {post.categories?.map((cat) => (
-              <Link key={cat.slug} href={`/${cat.slug}`}>
-                <Badge variant="outline">{cat.name}</Badge>
-              </Link>
-            ))}
+          <div className="flex flex-wrap items-center justify-between gap-4 py-6">
+            <div className="flex items-center gap-2">
+              <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+              {post.categories?.map((cat) => (
+                <Link key={cat.slug} href={`/${cat.slug}`}>
+                  <Badge variant="outline">{cat.name}</Badge>
+                </Link>
+              ))}
+            </div>
+            <ShareButtons
+              url={`${process.env.NEXT_PUBLIC_SITE_URL || "https://petpawpaw.net"}/${post.slug}`}
+              title={post.title}
+            />
           </div>
         </article>
 

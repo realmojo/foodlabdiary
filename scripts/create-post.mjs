@@ -697,14 +697,7 @@ function markComplete(url) {
   }
 }
 
-async function main() {
-  let url = process.argv[2]
-  const categorySlug = process.argv[3]
-
-  if (!url) {
-    url = pickRandomUrl()
-  }
-
+async function processOne(url, categorySlug) {
   console.log("═══════════════════════════════════════════")
   console.log("  pawpaw 포스트 자동 생성")
   console.log("═══════════════════════════════════════════\n")
@@ -719,8 +712,9 @@ async function main() {
   log("🖼️", `이미지: ${images.length}개`)
 
   if (paragraphs.length === 0) {
-    log("❌", "본문을 추출할 수 없습니다.")
-    process.exit(1)
+    log("❌", "본문을 추출할 수 없습니다. 건너뜁니다.")
+    markComplete(url)
+    return
   }
 
   console.log("")
@@ -764,6 +758,32 @@ async function main() {
   console.log("\n═══════════════════════════════════════════")
   console.log(`  포스트 URL: /${post.slug}`)
   console.log("═══════════════════════════════════════════\n")
+}
+
+async function main() {
+  const singleUrl = process.argv[2]
+  const categorySlug = process.argv[3]
+
+  // URL을 직접 지정한 경우 1회만 실행
+  if (singleUrl) {
+    await processOne(singleUrl, categorySlug)
+    return
+  }
+
+  // 랜덤 모드: 남은 URL이 없을 때까지 반복
+  let round = 1
+  while (true) {
+    const url = pickRandomUrl()
+    console.log(`\n🔄 [${round}번째] ${url}\n`)
+    try {
+      await processOne(url, categorySlug)
+    } catch (err) {
+      log("❌", `오류 발생: ${err.message || err}`)
+      log("⏭️", "해당 URL을 건너뛰고 다음으로 진행합니다.")
+      markComplete(url)
+    }
+    round++
+  }
 }
 
 main().catch((err) => {

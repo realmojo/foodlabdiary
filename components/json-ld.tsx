@@ -76,7 +76,7 @@ export function ArticleJsonLd({ post }: { post: Post }) {
     "@type": "Article",
     "@id": `${postUrl}/#article`,
     headline: post.title,
-    description: post.excerpt,
+    description: post.excerpt?.replace(/<[^>]*>/g, ""),
     url: postUrl,
     datePublished: post.published_at,
     dateModified: post.updated_at,
@@ -103,13 +103,11 @@ export function ArticleJsonLd({ post }: { post: Post }) {
     wordCount: post.content
       .filter((b: ContentBlock) => b.type === "paragraph" && b.text)
       .reduce((sum: number, b: ContentBlock) => sum + (b.text?.length ?? 0), 0),
-    keywords: [
+    keywords: [...new Set([
       post.primary_category?.name,
       ...(post.categories?.map((c) => c.name) ?? []),
       "반려동물",
-    ]
-      .filter(Boolean)
-      .join(", "),
+    ].filter(Boolean))].join(", "),
     speakable: {
       "@type": "SpeakableSpecification",
       cssSelector: ["article h1", "article header p"],

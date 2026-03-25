@@ -37,7 +37,8 @@
       "Bash(python3:*)",
       "Bash(rsvg-convert -w 192 -h 192 app/icon.svg -o public/icon-192.png)",
       "Bash(rsvg-convert -w 512 -h 512 app/icon.svg -o public/icon-512.png)",
-      "Bash(grep SUPABASE_URL /Users/gshs/Desktop/m/pawpaw/.env*)"
+      "Bash(grep SUPABASE_URL /Users/gshs/Desktop/m/pawpaw/.env*)",
+      "WebFetch(domain:petpawpaw.net)"
     ]
   }
 }
