@@ -123,19 +123,42 @@ async function ollamaGenerate(prompt) {
 
 // ─── Step 1: 원문 추출 ────────────────────────────────
 
+function decodeEntities(text) {
+  return text
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#8220;/g, '"')
+    .replace(/&#8221;/g, '"')
+    .replace(/&#8217;/g, "'")
+    .replace(/&#8230;/g, "…")
+    .replace(/&#039;/g, "'")
+    .trim()
+}
+
 function extractArticle(html) {
-  // 제목 추출
-  const titleMatch =
+  // 제목 추출: og:title → h1.entry-title → h1 → title
+  const ogTitleMatch = html.match(
+    /<meta[^>]*property="og:title"[^>]*content="([^"]+)"/i
+  )
+  const h1Match =
     html.match(
       /<h1[^>]*class="[^"]*entry-title[^"]*"[^>]*>([\s\S]*?)<\/h1>/i
-    ) ||
-    html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) ||
-    html.match(/<title>([\s\S]*?)<\/title>/i)
-  const title = titleMatch
-    ? titleMatch[1].replace(/<[^>]+>/g, "").trim()
-    : "제목 없음"
+    ) || html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)
+  const titleTagMatch = html.match(/<title>([\s\S]*?)<\/title>/i)
 
-  // 본문 추출 (entry-content 또는 article 태그)
+  const title = ogTitleMatch
+    ? decodeEntities(ogTitleMatch[1])
+    : h1Match
+      ? decodeEntities(h1Match[1])
+      : titleTagMatch
+        ? decodeEntities(titleTagMatch[1])
+        : "제목 없음"
+
+  // 본문 추출: entry-content → article-body → article → 전체 html
   const contentMatch =
     html.match(
       /<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>([\s\S]*?)<\/div>\s*(?:<\/|<div[^>]*class="[^"]*(?:post-tags|author-box|related|comments|share))/i
@@ -143,28 +166,47 @@ function extractArticle(html) {
     html.match(
       /<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i
     ) ||
+    html.match(
+      /<div[^>]*class="[^"]*article-body[^"]*"[^>]*>([\s\S]*?)<\/div>/i
+    ) ||
     html.match(/<article[^>]*>([\s\S]*?)<\/article>/i)
 
-  const contentHtml = contentMatch ? contentMatch[1] : ""
+  const contentHtml = contentMatch ? contentMatch[1] : html
 
-  // 이미지 URL 추출
-  const images = []
-  const imgRegex = /<img[^>]+src="([^"]+)"[^>]*>/gi
+  // 이미지 URL + alt 추출: og:image 먼저, 그 다음 본문 내 이미지
+  const images = [] // [{url, alt}]
+  const seenUrls = new Set()
+  const ogImageMatch = html.match(
+    /<meta[^>]*property="og:image"[^>]*content="([^"]+)"/i
+  )
+  if (ogImageMatch) {
+    const ogUrl = ogImageMatch[1].replace(/&amp;/g, "&")
+    images.push({ url: ogUrl, alt: title })
+    seenUrls.add(ogUrl)
+  }
+
+  const imgRegex = /<img[^>]*src="([^"]+)"[^>]*>/gi
   let imgMatch
   while ((imgMatch = imgRegex.exec(contentHtml)) !== null) {
-    const src = imgMatch[1]
+    const fullTag = imgMatch[0]
+    const fullTagLower = fullTag.toLowerCase()
+    const src = imgMatch[1].replace(/&amp;/g, "&")
+    const srcLower = src.toLowerCase()
+    // 아바타, 저자, 로고 등 불필요한 이미지 제외 (태그 전체 + src 모두 검사)
+    const excluded = ["avatar", "headshot", "byline", "author", "logo", "icon"]
+    if (excluded.some((kw) => fullTagLower.includes(kw) || srcLower.includes(kw))) continue
     if (
-      src.includes("wp-content/uploads") ||
-      src.includes("s3.") ||
-      src.match(/\.(jpg|jpeg|png|webp|gif)/i)
+      (src.includes("wp-content/uploads") ||
+        src.includes("assets.newsweek") ||
+        src.includes("s3.") ||
+        src.match(/\.(jpg|jpeg|png|webp|gif)/i)) &&
+      !seenUrls.has(src)
     ) {
-      if (
-        !src.includes("logo") &&
-        !src.includes("icon") &&
-        !src.includes("avatar")
-      ) {
-        images.push(src)
-      }
+      // alt 텍스트 추출
+      const altMatch = fullTag.match(/alt="([^"]*)"/i)
+      const alt = altMatch ? decodeEntities(altMatch[1]) : ""
+      images.push({ url: src, alt })
+      seenUrls.add(src)
     }
   }
 
@@ -173,17 +215,7 @@ function extractArticle(html) {
   const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi
   let pMatch
   while ((pMatch = pRegex.exec(contentHtml)) !== null) {
-    const text = pMatch[1]
-      .replace(/<[^>]+>/g, "")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#8220;/g, '"')
-      .replace(/&#8221;/g, '"')
-      .replace(/&#8230;/g, "…")
-      .trim()
+    const text = decodeEntities(pMatch[1])
     if (text.length > 10) paragraphs.push(text)
   }
 
@@ -200,20 +232,20 @@ async function rewriteArticle(title, paragraphs) {
 
 ## 반드시 지켜야 할 규칙
 1. 제목: 독자의 호기심을 강하게 자극하는 새로운 제목 작성 (원문 제목을 그대로 사용하지 마세요)
-2. 본문 길이: 반드시 3500자 이상 작성 (이것은 절대적 요구사항입니다)
-3. 섹션 구성: 8~10개의 ## 소제목 섹션으로 나누기
-4. 각 섹션 본문: 최소 3~5개 문장으로 충분히 설명
+2. 본문 길이: 2000~3000자 이내로 간결하게 작성 (3000자를 절대 넘기지 마세요)
+3. 섹션 구성: 4~6개의 ## 소제목 섹션으로 나누기
+4. 각 섹션 본문: 2~3개 문장으로 핵심만 전달
 5. 문체: 정보성 매거진 톤, 존댓말(~합니다, ~해요)
 6. 원문의 핵심 주제를 다루되, 모든 문장을 완전히 새로 작성
 7. 구체적인 수치, 예시, 팁을 풍부하게 포함
 8. 도입부: 독자의 공감을 이끄는 상황 묘사로 시작
-9. 결론: 핵심 메시지를 요약하고 독자에게 따뜻한 조언을 전하며 마무리
+9. "결론", "마무리", "정리" 같은 마무리 섹션은 절대 넣지 마세요. 마지막 섹션도 본문 내용처럼 구체적인 정보를 담아주세요.
 10. 중간중간 리스트(- 항목)도 활용하여 가독성을 높이세요
 
 ## 출력 형식 (반드시 이 형식을 정확히 따르세요)
 TITLE: 새로운 제목을 여기에
 BODY:
-여기부터 본문 시작 (마크다운 ## 소제목 사용, 3500자 이상)
+여기부터 본문 시작 (마크다운 ## 소제목 사용, 2000~3000자)
 
 ## 원문 제목
 ${title}
@@ -221,7 +253,7 @@ ${title}
 ## 원문 내용 (참고용)
 ${originalText}
 
-중요: 반드시 3500자 이상 작성하세요. 짧게 쓰면 안 됩니다. 각 섹션을 충분히 상세하게 서술하세요.`
+중요: 2000~3000자 이내로 간결하게 작성하세요. 3000자를 넘기지 마세요. 핵심 정보만 담아주세요.`
 
   log("🤖", "Ollama gemma3 재창작 요청 중... (최대 15분 소요)")
   const response = await ollamaGenerate(prompt)
@@ -276,7 +308,7 @@ function convertInlineMarkdown(text) {
   return text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
 }
 
-function markdownToBlocks(markdown, imageUrls) {
+function markdownToBlocks(markdown, s3Images) {
   const blocks = []
   const lines = markdown.split("\n")
   let currentParagraph = []
@@ -338,7 +370,7 @@ function markdownToBlocks(markdown, imageUrls) {
   flushParagraph()
 
   // 2단계: 이미지를 heading 위치 기준으로 균등 배치
-  if (imageUrls.length === 0) return blocks
+  if (s3Images.length === 0) return blocks
 
   const headingIndices = blocks
     .map((b, i) => (b.type === "heading" && b.level === 2 ? i : -1))
@@ -346,70 +378,50 @@ function markdownToBlocks(markdown, imageUrls) {
 
   if (headingIndices.length === 0) {
     // heading이 없으면 블록 사이에 균등 배치
-    const gap = Math.max(1, Math.floor(blocks.length / (imageUrls.length + 1)))
-    for (let i = imageUrls.length - 1; i >= 0; i--) {
+    const gap = Math.max(1, Math.floor(blocks.length / (s3Images.length + 1)))
+    for (let i = s3Images.length - 1; i >= 0; i--) {
+      const img = s3Images[i]
       const insertAt = Math.min(gap * (i + 1), blocks.length)
       blocks.splice(insertAt, 0, {
         type: "image",
-        url: imageUrls[i],
-        alt: "",
-        caption: "",
+        url: img.url,
+        alt: img.alt || "",
+        caption: img.caption || "",
       })
     }
     return blocks
   }
 
   // heading 간격에 맞춰 이미지를 균등 분배
-  // 각 이미지가 들어갈 heading 뒤 위치를 계산
-  const totalImages = imageUrls.length
+  const totalImages = s3Images.length
   const totalHeadings = headingIndices.length
   const insertPositions = []
 
   for (let i = 0; i < totalImages; i++) {
-    // 이미지를 heading들 사이에 균등하게 배분
     const headingIdx = Math.round((i / totalImages) * (totalHeadings - 1))
     insertPositions.push(headingIndices[headingIdx])
   }
 
   // 뒤에서부터 삽입해야 인덱스가 밀리지 않음
   for (let i = totalImages - 1; i >= 0; i--) {
+    const img = s3Images[i]
     const afterHeading = insertPositions[i] + 1
     blocks.splice(afterHeading, 0, {
       type: "image",
-      url: imageUrls[i],
-      alt: "",
-      caption: "",
+      url: img.url,
+      alt: img.alt || "",
+      caption: img.caption || "",
     })
   }
 
   return blocks
 }
 
-// ─── Step 4: 이미지 분석 → 재생성 → S3 업로드 ───────
+// ─── Step 4: 대표이미지 AI 생성 + 원본 이미지 → S3 업로드 ───────
 
-async function analyzeImage(imageBuffer) {
-  // webp 등 다양한 포맷을 llava가 처리할 수 있도록 JPEG로 변환
-  const jpegBuffer = await sharp(imageBuffer).jpeg({ quality: 85 }).toBuffer()
-  const base64 = jpegBuffer.toString("base64")
-  const response = await ollama.generate({
-    model: "llava",
-    prompt:
-      "Describe this image in detail for recreating it. Include subject, composition, colors, mood, background, and style. Be specific and vivid. Output only the description, nothing else.",
-    images: [base64],
-    options: { temperature: 0.3, num_predict: 512 },
-    keep_alive: "15m",
-  })
-  return response.response || ""
-}
-
-async function unloadModel(model) {
-  try {
-    await ollama.generate({ model, prompt: "", keep_alive: 0 })
-  } catch {}
-}
-
-async function generateImage(description) {
-  const prompt = `Create a high-quality, original illustration: ${description}. Style: clean, modern, vibrant colors, professional pet magazine photography style.`
+async function generateFeaturedImage(title) {
+  const prompt = `Create a heartwarming, adorable photo of a cute animal related to this topic: "${title}". Style: high-quality pet photography, warm natural lighting, soft bokeh background, emotional and endearing expression, magazine cover quality. The animal should be the clear focal point, looking directly at camera or in a charming pose. No text, no overlays, pure photograph.`
+  log("🎨", `대표 이미지 AI 생성 중 (제목 기반)...`)
   const response = await ollama.generate({
     model: "x/z-image-turbo",
     prompt,
@@ -417,108 +429,83 @@ async function generateImage(description) {
     keep_alive: "15m",
   })
 
-  // x/z-image-turbo returns base64 image in response.image (singular string)
+  let rawBuffer = null
   if (response.image) {
-    return Buffer.from(response.image, "base64")
+    rawBuffer = Buffer.from(response.image, "base64")
+  } else if (response.images && response.images.length > 0) {
+    rawBuffer = Buffer.from(response.images[0], "base64")
   }
 
-  // fallback: response.images (array)
-  if (response.images && response.images.length > 0) {
-    return Buffer.from(response.images[0], "base64")
+  if (!rawBuffer) {
+    log("⚠️", "대표 이미지 생성 실패")
+    return null
   }
 
-  return null
+  // 1200x628 (1.91:1) 리사이즈 + webp 변환
+  const webpBuffer = await sharp(rawBuffer)
+    .resize(1200, 628, { fit: "cover" })
+    .webp({ quality: 85 })
+    .toBuffer()
+
+  log("✅", `대표 이미지 생성 완료 (${(webpBuffer.length / 1024).toFixed(0)}KB, 1200x628)`)
+  return webpBuffer
 }
 
-async function uploadImagesToS3(imageUrls) {
+async function uploadImagesToS3(images, title) {
   const now = new Date()
   const prefix = `posts/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}`
-  const uploaded = []
+  const uploaded = [] // [{url, alt, caption}]
 
-  // ── Phase 1: 모든 이미지 다운로드 ──
-  const downloads = []
-  for (let i = 0; i < imageUrls.length; i++) {
-    const url = imageUrls[i]
+  // ── 첫 번째 이미지: 제목 기반 AI 생성 (대표 이미지) ──
+  try {
+    const featuredBuffer = await generateFeaturedImage(title)
+    if (featuredBuffer) {
+      const filename = `${randomUUID().slice(0, 8)}.webp`
+      const key = `${prefix}/${filename}`
+      log("☁️", `대표 이미지 S3 업로드: s3://${S3_BUCKET}/${key}`)
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: S3_BUCKET,
+          Key: key,
+          Body: featuredBuffer,
+          ContentType: "image/webp",
+        })
+      )
+      uploaded.push({
+        url: `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`,
+        alt: title,
+        caption: title,
+      })
+    }
+  } catch (err) {
+    log("⚠️", `대표 이미지 생성/업로드 실패: ${err.message}`)
+  }
+
+  // x/z-image-turbo 언로드 → VRAM 확보
+  try {
+    await ollama.generate({ model: "x/z-image-turbo", prompt: "", keep_alive: 0 })
+  } catch {}
+
+  // ── 나머지 이미지: 원본 다운로드 → webp 변환 → S3 업로드 ──
+  for (let i = 0; i < images.length; i++) {
+    const { url, alt } = images[i]
     log(
       "📸",
-      `이미지 다운로드 중 (${i + 1}/${imageUrls.length}): ${url.slice(0, 80)}...`
+      `원본 이미지 다운로드 중 (${i + 1}/${images.length}): ${url.slice(0, 80)}...`
     )
     try {
       const { buffer } = await fetchBuffer(url)
       log("✅", `다운로드 완료 (${(buffer.length / 1024).toFixed(0)}KB)`)
-      downloads.push({ buffer, index: i })
-    } catch (err) {
-      log("⚠️", `이미지 다운로드 실패: ${err.message}`)
-    }
-  }
 
-  // gemma3 언로드 → VRAM 확보 (텍스트 생성/분류/slug에서 사용 후 남아있음)
-  log("🔄", `gemma3 모델 언로드 중...`)
-  await unloadModel(MODEL)
+      // webp 변환
+      const webpBuffer = await sharp(buffer).webp({ quality: 80 }).toBuffer()
 
-  // ── Phase 2: llava로 모든 이미지 분석 ──
-  log("🔍", `llava 모델로 ${downloads.length}개 이미지 분석 시작...`)
-  const descriptions = []
-  for (const { buffer, index } of downloads) {
-    log("🔍", `이미지 분석 중 (${index + 1}/${imageUrls.length})...`)
-    try {
-      const desc = await analyzeImage(buffer)
-      log("📝", `분석 완료: ${desc.slice(0, 100)}...`)
-      descriptions.push({ buffer, description: desc, index })
-    } catch (err) {
-      log("⚠️", `이미지 분석 실패, 원본 사용: ${err.message}`)
-      descriptions.push({ buffer, description: null, index })
-    }
-  }
-
-  // llava 언로드 → VRAM 확보
-  log("🔄", `llava 모델 언로드 중...`)
-  await unloadModel("llava")
-
-  // ── Phase 3: x/z-image-turbo로 모든 이미지 생성 ──
-  log(
-    "🎨",
-    `x/z-image-turbo 모델로 ${descriptions.length}개 이미지 생성 시작...`
-  )
-  const results = []
-  for (const { buffer, description, index } of descriptions) {
-    if (description) {
-      log("🎨", `이미지 생성 중 (${index + 1}/${imageUrls.length})...`)
-      try {
-        const generatedBuffer = await generateImage(description)
-        if (generatedBuffer) {
-          log(
-            "✅",
-            `생성 완료 (${(generatedBuffer.length / 1024).toFixed(0)}KB)`
-          )
-          results.push({ buffer: generatedBuffer, index })
-          continue
-        }
-      } catch (err) {
-        log("⚠️", `이미지 생성 실패: ${err.message}`)
-      }
-    }
-    // fallback: 원본 사용
-    log("⚠️", `원본 이미지 사용 (${index + 1})`)
-    results.push({ buffer, index })
-  }
-
-  // x/z-image-turbo 언로드 → VRAM 확보
-  log("🔄", `x/z-image-turbo 모델 언로드 중...`)
-  await unloadModel("x/z-image-turbo")
-
-  // ── Phase 4: webp 변환 → S3 업로드 ──
-  for (const { buffer: sourceBuffer, index } of results) {
-    try {
-      const webpBuffer = await sharp(sourceBuffer)
-        .webp({ quality: 80 })
-        .toBuffer()
       const filename = `${randomUUID().slice(0, 8)}.webp`
       const key = `${prefix}/${filename}`
 
       log(
         "☁️",
-        `S3 업로드 (${index + 1}/${imageUrls.length}): s3://${S3_BUCKET}/${key} (${(sourceBuffer.length / 1024).toFixed(0)}KB → ${(webpBuffer.length / 1024).toFixed(0)}KB webp)`
+        `S3 업로드 (${i + 1}/${images.length}): s3://${S3_BUCKET}/${key} (${(webpBuffer.length / 1024).toFixed(0)}KB webp)`
       )
 
       await s3.send(
@@ -531,9 +518,9 @@ async function uploadImagesToS3(imageUrls) {
       )
 
       const s3Url = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`
-      uploaded.push(s3Url)
+      uploaded.push({ url: s3Url, alt: alt || title, caption: alt || "" })
     } catch (err) {
-      log("⚠️", `이미지 업로드 실패: ${err.message}`)
+      log("⚠️", `이미지 처리 실패: ${err.message}`)
     }
   }
 
@@ -594,7 +581,7 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
   }
 
   const slug = await slugify(title)
-  const featuredImage = s3Images.length > 0 ? s3Images[0] : null
+  const featuredImage = s3Images.length > 0 ? s3Images[0].url : null
 
   // 읽기 시간 계산
   const totalChars = blocks
@@ -660,20 +647,33 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
 // ─── Main ─────────────────────────────────────────────
 
 function pickRandomUrl() {
-  const sitemapPath = resolve(__dirname, "sitemap-urls.json")
+  const sources = [
+    resolve(__dirname, "sitemap-urls.json"),
+    resolve(__dirname, "newsweek-urls.json"),
+  ]
   const completePath = resolve(__dirname, "complete-urls.json")
 
-  if (!existsSync(sitemapPath)) {
-    console.error("❌ sitemap-urls.json 파일이 없습니다.")
-    process.exit(1)
-  }
-
-  const allUrls = JSON.parse(readFileSync(sitemapPath, "utf-8"))
   const completeUrls = existsSync(completePath)
     ? JSON.parse(readFileSync(completePath, "utf-8"))
     : []
+  const completeSet = new Set(completeUrls)
 
-  const remaining = allUrls.filter((u) => !completeUrls.includes(u))
+  // 모든 소스 파일에서 URL 수집
+  let allUrls = []
+  for (const src of sources) {
+    if (existsSync(src)) {
+      const urls = JSON.parse(readFileSync(src, "utf-8"))
+      allUrls = allUrls.concat(urls)
+    }
+  }
+
+  if (allUrls.length === 0) {
+    console.error("❌ sitemap-urls.json 또는 newsweek-urls.json 파일이 없습니다.")
+    process.exit(1)
+  }
+
+  // 중복 제거 + 완료된 URL 필터
+  const remaining = [...new Set(allUrls)].filter((u) => !completeSet.has(u))
 
   if (remaining.length === 0) {
     console.log("✅ 모든 URL이 처리 완료되었습니다.")
@@ -719,20 +719,54 @@ async function processOne(url, categorySlug) {
 
   console.log("")
 
-  // Step 2: S3 이미지 업로드
-  log("📤", "이미지 S3 업로드 시작...")
-  const s3Images = await uploadImagesToS3(images)
-  log("✅", `이미지 업로드 완료: ${s3Images.length}개\n`)
-
-  // Step 3: 카테고리 자동 분류 (명시하지 않은 경우)
+  // Step 2: 카테고리 자동 분류 (명시하지 않은 경우)
   const finalCategory =
     categorySlug || (await detectCategory(title, paragraphs))
 
-  // Step 4: Gemma3로 재창작
+  // Step 3: Gemma3로 재창작 (제목이 먼저 필요 → 대표 이미지 생성에 사용)
   const { newTitle, newBody } = await rewriteArticle(title, paragraphs)
   log("✅", `재창작 완료`)
   log("📄", `새 제목: ${newTitle}`)
   log("📝", `새 본문 길이: ${newBody.length}자\n`)
+
+  // Step 4: 대표 이미지 AI 생성 + 원본 이미지 S3 업로드
+  log("📤", "이미지 처리 시작...")
+  const s3Images = await uploadImagesToS3(images, newTitle)
+  log("✅", `이미지 업로드 완료: ${s3Images.length}개\n`)
+
+  // Step 4.5: 이미지 alt/caption 한글화
+  if (s3Images.length > 0) {
+    log("🏷️", "이미지 alt/caption 한글 생성 중...")
+    const altList = s3Images.map((img, i) => `${i + 1}. ${img.alt || "이미지"}`).join("\n")
+    try {
+      const altPrompt = `아래 이미지 설명들을 한국어로 자연스럽게 번역/개선해주세요.
+각 줄에 번호와 함께 alt 텍스트(간결한 이미지 설명)와 caption(한 문장 설명)을 작성해주세요.
+
+형식 (반드시 이 형식으로):
+1. ALT: 간결한 설명 | CAPTION: 한 문장 캡션
+2. ALT: 간결한 설명 | CAPTION: 한 문장 캡션
+
+기사 제목: ${newTitle}
+
+이미지 설명:
+${altList}`
+      const altResponse = await ollamaGenerate(altPrompt)
+      const altLines = altResponse.split("\n").filter((l) => l.match(/^\d+\./))
+      for (const line of altLines) {
+        const numMatch = line.match(/^(\d+)\./)
+        if (!numMatch) continue
+        const idx = parseInt(numMatch[1]) - 1
+        if (idx < 0 || idx >= s3Images.length) continue
+        const altMatch = line.match(/ALT:\s*(.+?)\s*\|/i)
+        const capMatch = line.match(/CAPTION:\s*(.+)/i)
+        if (altMatch) s3Images[idx].alt = altMatch[1].trim()
+        if (capMatch) s3Images[idx].caption = capMatch[1].trim()
+      }
+      log("✅", "이미지 alt/caption 생성 완료")
+    } catch (err) {
+      log("⚠️", `alt/caption 생성 실패, 기본값 사용: ${err.message}`)
+    }
+  }
 
   // Step 5: 블록 변환
   const blocks = markdownToBlocks(newBody, s3Images)
