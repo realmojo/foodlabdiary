@@ -1,5 +1,6 @@
 import { Geist_Mono, Noto_Sans } from "next/font/google"
 import type { Metadata } from "next"
+import Script from "next/script"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -82,6 +83,25 @@ export default function RootLayout({
           title="포우포우 RSS 피드"
           href="/rss.xml"
         />
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-Y0GVNHGVDC"
+          strategy="afterInteractive"
+        />
+        <Script id="google-gtag" strategy="afterInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-Y0GVNHGVDC');`}
+        </Script>
+        <Script
+          src="//wcs.pstatic.net/wcslog.js"
+          strategy="beforeInteractive"
+        />
+        <Script id="naver-wcs" strategy="beforeInteractive">
+          {`if(!wcs_add) var wcs_add = {};
+wcs_add["wa"] = "184a8e4ccf7e900";
+if(window.wcs) { wcs_do(); }`}
+        </Script>
       </head>
       <body className="flex min-h-svh flex-col">
         <ThemeProvider>

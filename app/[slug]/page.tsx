@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowLeft, Clock, User, Tag } from "lucide-react"
+import { ArrowLeft, ChevronRight, Clock, User, Tag } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { PostCard } from "@/components/post-card"
@@ -235,14 +235,21 @@ async function PostView({
 }) {
   const primaryCategory = post.primary_category
   const [relatedPosts, recentPosts] = await Promise.all([
-    getRelatedPosts(post.id, post.primary_category_id),
-    getPosts(10),
+    getRelatedPosts(post.id, post.primary_category_id, 6),
+    getPosts(20),
   ])
 
   // 사이드바 인기글에서 현재 글 제외
   const sidebarPosts = recentPosts
     .filter((p) => p.slug !== post.slug)
     .slice(0, 4)
+
+  // 추천 콘텐츠: 같은 카테고리 우선, 부족하면 최근 글로 채움 (최대 6개)
+  const relatedSlugs = new Set(relatedPosts.map((p) => p.slug))
+  const extraPosts = recentPosts.filter(
+    (p) => p.slug !== post.slug && !relatedSlugs.has(p.slug),
+  )
+  const recommendedPosts = [...relatedPosts, ...extraPosts].slice(0, 6)
 
   const breadcrumbItems = [
     { name: "홈", href: "/" },
@@ -257,15 +264,29 @@ async function PostView({
       <ArticleJsonLd post={post} />
       <BreadcrumbJsonLd items={breadcrumbItems} />
 
-      <div className="py-4">
-        <Link
-          href={primaryCategory ? `/${primaryCategory.slug}` : "/"}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          {primaryCategory ? primaryCategory.name : "홈으로"}
-        </Link>
-      </div>
+      {/* Breadcrumb */}
+      <nav aria-label="breadcrumb" className="py-4">
+        <ol className="flex items-center gap-1 text-sm text-muted-foreground">
+          {breadcrumbItems.map((item, i) => {
+            const isLast = i === breadcrumbItems.length - 1
+            return (
+              <li key={item.href} className="flex items-center gap-1">
+                {i > 0 && <ChevronRight className="h-3 w-3" />}
+                {isLast ? (
+                  <span className="text-foreground line-clamp-1">{item.name}</span>
+                ) : (
+                  <Link
+                    href={item.href}
+                    className="transition-colors hover:text-foreground"
+                  >
+                    {item.name}
+                  </Link>
+                )}
+              </li>
+            )
+          })}
+        </ol>
+      </nav>
 
       {/* PC: 본문 + 사이드바 / 모바일: 본문 → 사이드바 */}
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_280px]">
@@ -335,15 +356,45 @@ async function PostView({
         </div>
       </div>
 
-      {/* 관련 포스트 (전체 너비) */}
-      {relatedPosts.length > 0 && (
+      {/* 추천 콘텐츠 */}
+      {recommendedPosts.length > 0 && (
         <>
           <Separator />
           <section className="py-10">
-            <h2 className="mb-6 text-lg font-bold">관련 포스트</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {relatedPosts.map((rp) => (
-                <PostCard key={rp.slug} post={rp} />
+            <h2 className="mb-6 text-lg font-bold">추천 콘텐츠</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              {recommendedPosts.map((rp) => (
+                <Link
+                  key={rp.slug}
+                  href={`/${rp.slug}`}
+                  className="group flex gap-4 rounded-md border p-3 transition-colors hover:bg-muted/50"
+                >
+                  <div className="relative h-24 w-32 shrink-0 overflow-hidden rounded bg-muted sm:h-28 sm:w-40">
+                    {rp.featured_image_url && (
+                      <Image
+                        src={rp.featured_image_url}
+                        alt={rp.title}
+                        fill
+                        className="object-cover"
+                        sizes="160px"
+                      />
+                    )}
+                  </div>
+                  <div className="flex min-w-0 flex-col justify-center">
+                    {rp.primary_category && (
+                      <span className="mb-1 text-xs text-muted-foreground">
+                        {rp.primary_category.emoji} {rp.primary_category.name}
+                      </span>
+                    )}
+                    <h3 className="text-sm font-semibold leading-snug group-hover:underline line-clamp-2">
+                      {rp.title}
+                    </h3>
+                    <span className="mt-1 text-xs text-muted-foreground">
+                      {rp.published_at &&
+                        new Date(rp.published_at).toLocaleDateString("ko-KR")}
+                    </span>
+                  </div>
+                </Link>
               ))}
             </div>
           </section>
