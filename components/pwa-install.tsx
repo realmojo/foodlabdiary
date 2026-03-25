@@ -76,7 +76,7 @@ export function PwaInstall() {
             홈 화면에 추가하고 더 빠르게 이용하세요
           </p>
         </div>
-        <div className="flex shrink-0 flex-col gap-1.5">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={handleInstall}
             className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600"
@@ -85,9 +85,10 @@ export function PwaInstall() {
           </button>
           <button
             onClick={handleDismiss}
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="닫기"
           >
-            닫기
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
       </div>

@@ -30,16 +30,15 @@ export async function Footer() {
               <span>포우포우</span>
             </Link>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              반려동물과 함께하는 더 나은 일상을 위한 정보 매거진.
+              반려동물과 함께하는 더 나은 일상을 위한 정보 매거진.<br />
+              수의학·영양학 자료를 기반으로 신뢰할 수 있는 콘텐츠를 제공합니다.
             </p>
             <div className="mt-3 space-y-1 text-xs text-muted-foreground">
               <p>
-                <span className="font-medium text-foreground">일반 문의</span>{" "}
-                hello@petpawpaw.net
-              </p>
-              <p>
-                <span className="font-medium text-foreground">광고·협업</span>{" "}
-                biz@petpawpaw.net
+                <span className="font-medium text-foreground">문의</span>{" "}
+                <a href="mailto:strikers1999@kakao.com" className="underline hover:text-foreground">
+                  strikers1999@kakao.com
+                </a>
               </p>
             </div>
           </div>
@@ -54,7 +53,7 @@ export async function Footer() {
                     href={`/${cat.slug}`}
                     className="inline-block rounded-full border px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:rounded-none lg:border-0 lg:px-0 lg:py-0 lg:text-sm"
                   >
-                    {cat.emoji} {cat.name}
+                    {cat.name}
                   </Link>
                 </li>
               ))}
@@ -96,9 +95,23 @@ export async function Footer() {
           </div>
         </div>
 
-        {/* 하단 저작권 */}
-        <div className="mt-10 border-t pt-6 text-center text-xs text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} 포우포우(pawpaw). All rights reserved.</p>
+        {/* 사업자 정보 & 저작권 */}
+        <div className="mt-10 border-t pt-6 text-xs text-muted-foreground">
+          <div className="flex flex-col items-center gap-1">
+            <p>
+              <span className="font-medium text-foreground">상호명:</span> 모조데이 |{" "}
+              <span className="font-medium text-foreground">대표:</span> 정만경 |{" "}
+              <span className="font-medium text-foreground">사업자등록번호:</span> 259-13-02051
+            </p>
+            <p>
+              <span className="font-medium text-foreground">주소:</span> 서울시 영등포구 선유로 71, 102동 602호 |{" "}
+              <span className="font-medium text-foreground">이메일:</span>{" "}
+              <a href="mailto:strikers1999@kakao.com" className="underline hover:text-foreground">
+                strikers1999@kakao.com
+              </a>
+            </p>
+            <p className="mt-3">&copy; {new Date().getFullYear()} 포우포우(pawpaw). All rights reserved.</p>
+          </div>
         </div>
       </div>
     </footer>

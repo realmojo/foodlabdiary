@@ -152,7 +152,7 @@ async function CategoryView({ slug }: { slug: string }) {
                   </h3>
                   {post.excerpt && (
                     <p className="mt-1 hidden text-sm text-muted-foreground line-clamp-1 sm:block">
-                      {post.excerpt}
+                      {post.excerpt?.replace(/<[^>]*>/g, "")}
                     </p>
                   )}
                   <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
@@ -286,7 +286,7 @@ async function PostView({
             <h1 className="text-2xl leading-tight font-bold sm:text-3xl">
               {post.title}
             </h1>
-            <p className="mt-3 text-muted-foreground">{post.excerpt}</p>
+            <p className="mt-3 text-muted-foreground">{post.excerpt?.replace(/<[^>]*>/g, "")}</p>
             <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
               {post.author && (
                 <span className="flex items-center gap-1">

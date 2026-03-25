@@ -18,6 +18,7 @@
 import { config } from "dotenv"
 import { fileURLToPath } from "url"
 import { dirname, resolve } from "path"
+import { readFileSync, writeFileSync, existsSync } from "fs"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -279,7 +280,6 @@ function markdownToBlocks(markdown, imageUrls) {
   const blocks = []
   const lines = markdown.split("\n")
   let currentParagraph = []
-  let imageIndex = 0
 
   function flushParagraph() {
     if (currentParagraph.length > 0) {
@@ -291,29 +291,17 @@ function markdownToBlocks(markdown, imageUrls) {
     }
   }
 
+  // 1단계: 텍스트 블록만 먼저 생성
   for (const line of lines) {
     const trimmed = line.trim()
 
     if (trimmed.startsWith("## ")) {
       flushParagraph()
-      // 소제목 후에 이미지 삽입 (남은 이미지가 있으면)
       blocks.push({
         type: "heading",
         level: 2,
         text: convertInlineMarkdown(trimmed.slice(3).trim()),
       })
-      if (
-        imageIndex < imageUrls.length &&
-        blocks.filter((b) => b.type === "heading").length % 2 === 0
-      ) {
-        blocks.push({
-          type: "image",
-          url: imageUrls[imageIndex],
-          alt: "",
-          caption: "",
-        })
-        imageIndex++
-      }
     } else if (trimmed.startsWith("### ")) {
       flushParagraph()
       blocks.push({
@@ -323,10 +311,7 @@ function markdownToBlocks(markdown, imageUrls) {
       })
     } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
       flushParagraph()
-      // 리스트 아이템 수집
       const items = [convertInlineMarkdown(trimmed.slice(2).trim())]
-      // peek ahead는 하지 않으므로 단일 아이템 리스트가 될 수 있음
-      // 대신 이전 블록이 list면 합침
       const lastBlock = blocks[blocks.length - 1]
       if (lastBlock && lastBlock.type === "list" && !lastBlock.ordered) {
         lastBlock.items.push(convertInlineMarkdown(trimmed.slice(2).trim()))
@@ -345,7 +330,6 @@ function markdownToBlocks(markdown, imageUrls) {
     } else if (trimmed === "") {
       flushParagraph()
     } else {
-      // TITLE: 이나 BODY: 라인은 무시
       if (/^(TITLE|BODY):/i.test(trimmed)) continue
       currentParagraph.push(trimmed)
     }
@@ -353,43 +337,49 @@ function markdownToBlocks(markdown, imageUrls) {
 
   flushParagraph()
 
-  // 맨 처음 이미지가 아직 안 들어갔으면 첫 단락 뒤에 삽입
-  if (imageIndex === 0 && imageUrls.length > 0) {
-    const firstHeadingIdx = blocks.findIndex((b) => b.type === "heading")
-    const insertIdx = firstHeadingIdx > 0 ? firstHeadingIdx : 1
-    blocks.splice(insertIdx, 0, {
-      type: "image",
-      url: imageUrls[0],
-      alt: "",
-      caption: "",
-    })
-    imageIndex++
-  }
+  // 2단계: 이미지를 heading 위치 기준으로 균등 배치
+  if (imageUrls.length === 0) return blocks
 
-  // 남은 이미지 균등 배치
-  while (imageIndex < imageUrls.length) {
-    const headings = blocks
-      .map((b, i) => (b.type === "heading" ? i : -1))
-      .filter((i) => i >= 0)
+  const headingIndices = blocks
+    .map((b, i) => (b.type === "heading" && b.level === 2 ? i : -1))
+    .filter((i) => i >= 0)
 
-    if (headings.length > 0) {
-      // 마지막 소제목 뒤에 삽입
-      const targetIdx = headings[headings.length - 1] + 1
-      blocks.splice(targetIdx, 0, {
+  if (headingIndices.length === 0) {
+    // heading이 없으면 블록 사이에 균등 배치
+    const gap = Math.max(1, Math.floor(blocks.length / (imageUrls.length + 1)))
+    for (let i = imageUrls.length - 1; i >= 0; i--) {
+      const insertAt = Math.min(gap * (i + 1), blocks.length)
+      blocks.splice(insertAt, 0, {
         type: "image",
-        url: imageUrls[imageIndex],
-        alt: "",
-        caption: "",
-      })
-    } else {
-      blocks.push({
-        type: "image",
-        url: imageUrls[imageIndex],
+        url: imageUrls[i],
         alt: "",
         caption: "",
       })
     }
-    imageIndex++
+    return blocks
+  }
+
+  // heading 간격에 맞춰 이미지를 균등 분배
+  // 각 이미지가 들어갈 heading 뒤 위치를 계산
+  const totalImages = imageUrls.length
+  const totalHeadings = headingIndices.length
+  const insertPositions = []
+
+  for (let i = 0; i < totalImages; i++) {
+    // 이미지를 heading들 사이에 균등하게 배분
+    const headingIdx = Math.round((i / totalImages) * (totalHeadings - 1))
+    insertPositions.push(headingIndices[headingIdx])
+  }
+
+  // 뒤에서부터 삽입해야 인덱스가 밀리지 않음
+  for (let i = totalImages - 1; i >= 0; i--) {
+    const afterHeading = insertPositions[i] + 1
+    blocks.splice(afterHeading, 0, {
+      type: "image",
+      url: imageUrls[i],
+      alt: "",
+      caption: "",
+    })
   }
 
   return blocks
@@ -427,16 +417,14 @@ async function generateImage(description) {
     keep_alive: "15m",
   })
 
-  // x/z-image-turbo returns base64 image in response.images
-  if (response.images && response.images.length > 0) {
-    return Buffer.from(response.images[0], "base64")
+  // x/z-image-turbo returns base64 image in response.image (singular string)
+  if (response.image) {
+    return Buffer.from(response.image, "base64")
   }
 
-  // fallback: check if response itself contains base64
-  const raw = response.response || ""
-  const b64Match = raw.match(/[A-Za-z0-9+/=]{100,}/)
-  if (b64Match) {
-    return Buffer.from(b64Match[0], "base64")
+  // fallback: response.images (array)
+  if (response.images && response.images.length > 0) {
+    return Buffer.from(response.images[0], "base64")
   }
 
   return null
@@ -671,18 +659,50 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
 
 // ─── Main ─────────────────────────────────────────────
 
+function pickRandomUrl() {
+  const sitemapPath = resolve(__dirname, "sitemap-urls.json")
+  const completePath = resolve(__dirname, "complete-urls.json")
+
+  if (!existsSync(sitemapPath)) {
+    console.error("❌ sitemap-urls.json 파일이 없습니다.")
+    process.exit(1)
+  }
+
+  const allUrls = JSON.parse(readFileSync(sitemapPath, "utf-8"))
+  const completeUrls = existsSync(completePath)
+    ? JSON.parse(readFileSync(completePath, "utf-8"))
+    : []
+
+  const remaining = allUrls.filter((u) => !completeUrls.includes(u))
+
+  if (remaining.length === 0) {
+    console.log("✅ 모든 URL이 처리 완료되었습니다.")
+    process.exit(0)
+  }
+
+  const picked = remaining[Math.floor(Math.random() * remaining.length)]
+  log("🎲", `남은 URL: ${remaining.length}개 중 랜덤 선택`)
+  return picked
+}
+
+function markComplete(url) {
+  const completePath = resolve(__dirname, "complete-urls.json")
+  const completeUrls = existsSync(completePath)
+    ? JSON.parse(readFileSync(completePath, "utf-8"))
+    : []
+
+  if (!completeUrls.includes(url)) {
+    completeUrls.push(url)
+    writeFileSync(completePath, JSON.stringify(completeUrls, null, 2), "utf-8")
+  }
+}
+
 async function main() {
-  const url = process.argv[2]
+  let url = process.argv[2]
   const categorySlug = process.argv[3]
 
   if (!url) {
-    console.log("사용법: node scripts/create-post.mjs <URL> [카테고리slug]")
-    console.log(
-      "예시:   node scripts/create-post.mjs https://example.com/article dogs"
-    )
-    console.log("")
-    console.log("카테고리: dogs, cats, animals")
-    process.exit(1)
+    url = pickRandomUrl()
   }
 
   console.log("═══════════════════════════════════════════")
@@ -736,6 +756,10 @@ async function main() {
     finalCategory
   )
   log("✅", `DB 저장 완료!`)
+
+  // 완료된 URL을 complete-urls.json에 저장
+  markComplete(url)
+  log("📋", `complete-urls.json에 저장 완료`)
 
   console.log("\n═══════════════════════════════════════════")
   console.log(`  포스트 URL: /${post.slug}`)

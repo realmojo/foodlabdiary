@@ -215,7 +215,7 @@ export default async function HomePage() {
                   <span>{formatDate(featuredPost.published_at)}</span>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
-                  {featuredPost.excerpt}
+                  {featuredPost.excerpt?.replace(/<[^>]*>/g, "")}
                 </p>
                 {/* Pagination arrows */}
                 <div className="mt-4 flex gap-1">
