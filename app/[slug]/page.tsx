@@ -249,7 +249,7 @@ async function PostView({
   // 사이드바 인기글에서 현재 글 제외
   const sidebarPosts = recentPosts
     .filter((p) => p.slug !== post.slug)
-    .slice(0, 4)
+    .slice(0, 16)
 
   // 추천 콘텐츠: 같은 카테고리 우선, 부족하면 최근 글로 채움 (최대 6개)
   const relatedSlugs = new Set(relatedPosts.map((p) => p.slug))
