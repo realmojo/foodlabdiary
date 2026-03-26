@@ -4,7 +4,7 @@ import { Clock, User, Tag } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { BlockRenderer } from "@/components/block-renderer"
-import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/json-ld"
+import { ArticleJsonLd, BreadcrumbJsonLd, CollectionJsonLd } from "@/components/json-ld"
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { ShareButtons } from "@/components/share-buttons"
@@ -115,6 +115,12 @@ async function CategoryView({ slug }: { slug: string }) {
         { name: "홈", href: "/" },
         { name: category.name, href: `/${slug}` },
       ]} />
+      <CollectionJsonLd
+        name={category.name}
+        description={category.description}
+        slug={slug}
+        posts={categoryPosts}
+      />
 
       {/* 카테고리 헤더 */}
       <section className="py-6">

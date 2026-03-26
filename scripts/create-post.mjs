@@ -721,12 +721,17 @@ async function generateCardNews(title, blocks, s3Images, slug) {
     .join("\n")
     .slice(0, 3000)
 
-  const prompt = `아래 기사를 읽고, 인스타그램 카드뉴스용 핵심 포인트를 추출해주세요.
+  const prompt = `아래 기사를 읽고, 인스타그램 카드뉴스용 스토리를 만들어주세요.
 
 규칙:
-- 각 포인트는 20자 이내로 짧고 임팩트 있게
-- 의미 있는 내용만 추출 (억지로 늘리지 마세요)
-- 내용이 충분하면 5~7개, 부족하면 3~4개도 괜찮습니다
+- 기승전결 구조로 이야기를 전개하세요
+  - 기(도입): 호기심을 끄는 도입부 1~2장
+  - 승(전개): 핵심 정보, 원인, 배경 설명 2~3장
+  - 전(심화): 구체적 사례, 수치, 놀라운 사실 1~2장
+  - 결(마무리): 결론, 교훈, 실천 팁 1장
+- 각 포인트는 20자 이내의 한 문장
+- 전체 3~7개 (기사 내용에 따라 자연스럽게 조절)
+- 앞뒤 포인트가 자연스럽게 연결되어야 합니다
 - 번호를 붙여서 출력 (1. 2. 3. ...)
 - 다른 설명 없이 포인트만 출력
 
@@ -1110,6 +1115,122 @@ async function postToBlogger(title, blocks, slug) {
   log("✅", `Blogger 게시 완료! → ${post.url}`)
 }
 
+// ─── Step 10: Facebook Page 포스팅 ───────────────────
+
+const FB_API = "https://graph.facebook.com/v22.0"
+
+async function postToFacebook(cardUrls, title, slug) {
+  const userToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN
+  if (!userToken) {
+    log("⚠️", "FACEBOOK_PAGE_ACCESS_TOKEN 미설정, Facebook 게시 건너뜀")
+    return
+  }
+
+  log("📘", "Facebook Page 게시 시작...")
+
+  const targetId = process.env.FACEBOOK_PAGE_ID
+  let pageId, pageToken
+
+  // 직접 페이지 토큰 요청
+  if (targetId) {
+    const pageData = await new Promise((resolve, reject) => {
+      https.get(`${FB_API}/${targetId}?fields=id,name,access_token&access_token=${userToken}`, (res) => {
+        let body = ""
+        res.on("data", (c) => (body += c))
+        res.on("end", () => {
+          try { resolve(JSON.parse(body)) } catch { reject(new Error(body)) }
+        })
+      }).on("error", reject)
+    })
+    if (pageData.error) throw new Error(pageData.error.message)
+    pageId = pageData.id
+    pageToken = pageData.access_token || userToken
+    log("📘", `Facebook Page: ${pageData.name} (${pageId})`)
+  } else {
+    // FACEBOOK_PAGE_ID 미설정 시 /me/accounts 첫 번째 사용
+    const accounts = await new Promise((resolve, reject) => {
+      https.get(`${FB_API}/me/accounts?fields=id,name,access_token&access_token=${userToken}`, (res) => {
+        let body = ""
+        res.on("data", (c) => (body += c))
+        res.on("end", () => {
+          try { resolve(JSON.parse(body)) } catch { reject(new Error(body)) }
+        })
+      }).on("error", reject)
+    })
+    if (!accounts.data || accounts.data.length === 0) {
+      log("⚠️", "연결된 Facebook Page가 없습니다")
+      return
+    }
+    const page = accounts.data[0]
+    pageId = page.id
+    pageToken = page.access_token
+    log("📘", `Facebook Page: ${page.name} (${pageId})`)
+  }
+
+  // 2) 각 카드 이미지를 unpublished로 업로드
+  const photoIds = []
+  const cardsToPost = cardUrls.slice(0, 10)
+
+  for (let i = 0; i < cardsToPost.length; i++) {
+    log("📤", `Facebook 카드 ${i + 1}/${cardsToPost.length} 업로드 중...`)
+    const url = new URL(`${FB_API}/${pageId}/photos`)
+    url.searchParams.set("access_token", pageToken)
+    url.searchParams.set("url", cardsToPost[i])
+    url.searchParams.set("published", "false")
+
+    const result = await new Promise((resolve, reject) => {
+      const req = https.request(url, { method: "POST" }, (res) => {
+        let body = ""
+        res.on("data", (c) => (body += c))
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(body)
+            if (json.error) reject(new Error(json.error.message))
+            else resolve(json)
+          } catch {
+            reject(new Error(body))
+          }
+        })
+      })
+      req.on("error", reject)
+      req.end()
+    })
+
+    photoIds.push(result.id)
+    await sleep(500)
+  }
+
+  // 3) 멀티 이미지 게시물 생성
+  const message = `${title}\n\n🐾 더 많은 반려동물 이야기 → petpawpaw.net\n\n#반려동물 #강아지 #고양이 #펫 #반려견 #petpawpaw`
+
+  const feedUrl = new URL(`${FB_API}/${pageId}/feed`)
+  feedUrl.searchParams.set("access_token", pageToken)
+  feedUrl.searchParams.set("message", message)
+  photoIds.forEach((id, i) => {
+    feedUrl.searchParams.set(`attached_media[${i}]`, JSON.stringify({ media_fbid: id }))
+  })
+
+  const published = await new Promise((resolve, reject) => {
+    const req = https.request(feedUrl, { method: "POST" }, (res) => {
+      let body = ""
+      res.on("data", (c) => (body += c))
+      res.on("end", () => {
+        try {
+          const json = JSON.parse(body)
+          if (json.error) reject(new Error(json.error.message))
+          else resolve(json)
+        } catch {
+          reject(new Error(body))
+        }
+      })
+    })
+    req.on("error", reject)
+    req.end()
+  })
+
+  log("✅", `Facebook 게시 완료! (post_id: ${published.id})`)
+}
+
 // ─── Main ─────────────────────────────────────────────
 
 function pickRandomUrl() {
@@ -1280,6 +1401,16 @@ ${altList}`
     await postToBlogger(newTitle, blocks, post.slug)
   } catch (err) {
     log("⚠️", `Blogger 게시 실패: ${err.message}`)
+  }
+
+  // Step 10: Facebook Page 게시
+  if (cardUrls && cardUrls.length > 0) {
+    console.log("")
+    try {
+      await postToFacebook(cardUrls, newTitle, post.slug)
+    } catch (err) {
+      log("⚠️", `Facebook 게시 실패: ${err.message}`)
+    }
   }
 
   // 완료된 URL을 complete-urls.json에 저장

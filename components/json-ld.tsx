@@ -154,6 +154,45 @@ export function FAQJsonLd({
   )
 }
 
+export function CollectionJsonLd({
+  name,
+  description,
+  slug,
+  posts,
+}: {
+  name: string
+  description: string | null
+  slug: string
+  posts: Post[]
+}) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "@id": `${SITE_URL}/${slug}/#collection`,
+    name,
+    description: description ?? undefined,
+    url: `${SITE_URL}/${slug}`,
+    isPartOf: { "@id": `${SITE_URL}/#website` },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: posts.length,
+      itemListElement: posts.slice(0, 20).map((post, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: `${SITE_URL}/${post.slug}`,
+        name: post.title,
+      })),
+    },
+  }
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  )
+}
+
 export function BreadcrumbJsonLd({
   items,
 }: {

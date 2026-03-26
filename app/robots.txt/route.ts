@@ -25,6 +25,8 @@ Allow: /
 
 User-Agent: Applebot-Extended
 Allow: /
+
+#DaumWebMasterTool:3db7e4837d0c9aa2a3e6df2bb383f2377a23b05a0f3689939509532dd6ca5fb0:/qlJZVLLsC1mJUlhCsN2iw==
 `
 
   return new Response(body, {

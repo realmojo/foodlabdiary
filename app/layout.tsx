@@ -80,6 +80,8 @@ export default function RootLayout({
       )}
     >
       <head>
+        <link rel="preconnect" href="https://petpawpaw.s3.ap-northeast-2.amazonaws.com" />
+        <link rel="dns-prefetch" href="https://petpawpaw.s3.ap-northeast-2.amazonaws.com" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#F59E0B" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
