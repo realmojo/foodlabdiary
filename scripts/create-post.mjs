@@ -18,7 +18,7 @@
 import { config } from "dotenv"
 import { fileURLToPath } from "url"
 import { dirname, resolve } from "path"
-import { readFileSync, writeFileSync, existsSync } from "fs"
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -194,7 +194,10 @@ function extractArticle(html) {
     const srcLower = src.toLowerCase()
     // 아바타, 저자, 로고 등 불필요한 이미지 제외 (태그 전체 + src 모두 검사)
     const excluded = ["avatar", "headshot", "byline", "author", "logo", "icon"]
-    if (excluded.some((kw) => fullTagLower.includes(kw) || srcLower.includes(kw))) continue
+    if (
+      excluded.some((kw) => fullTagLower.includes(kw) || srcLower.includes(kw))
+    )
+      continue
     if (
       (src.includes("wp-content/uploads") ||
         src.includes("assets.newsweek") ||
@@ -241,6 +244,7 @@ async function rewriteArticle(title, paragraphs) {
 8. 도입부: 독자의 공감을 이끄는 상황 묘사로 시작
 9. "결론", "마무리", "정리" 같은 마무리 섹션은 절대 넣지 마세요. 마지막 섹션도 본문 내용처럼 구체적인 정보를 담아주세요.
 10. 중간중간 리스트(- 항목)도 활용하여 가독성을 높이세요
+11. 원문 출처(Newsweek, BBC, CNN 등 미디어 이름)를 절대 언급하지 마세요. 출처 홍보, 독자 참여 유도(사진 보내기 등) 문구도 넣지 마세요.
 
 ## 출력 형식 (반드시 이 형식을 정확히 따르세요)
 TITLE: 새로운 제목을 여기에
@@ -622,6 +626,490 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
   return post
 }
 
+// ─── Step 7: 카드뉴스 생성 ────────────────────────────
+
+function wrapText(text, maxCharsPerLine) {
+  const words = text.split("")
+  const lines = []
+  let line = ""
+  for (const char of words) {
+    if (line.length >= maxCharsPerLine) {
+      lines.push(line)
+      line = ""
+    }
+    line += char
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
+function buildCardSvg(lines, options = {}) {
+  const {
+    width = 1080,
+    height = 1080,
+    fontSize = 48,
+    lineHeight = 72,
+    isTitle = false,
+    isEnd = false,
+    pageNum = "",
+    totalPages = "",
+  } = options
+
+  const textY = height / 2 - ((lines.length - 1) * lineHeight) / 2
+
+  const textLines = lines
+    .map(
+      (line, i) =>
+        `<text x="540" y="${textY + i * lineHeight}" text-anchor="middle" fill="${isTitle ? "#FFD700" : "white"}" font-family="'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif" font-size="${fontSize}" font-weight="${isTitle ? "800" : "600"}">${escapeXml(line)}</text>`
+    )
+    .join("\n    ")
+
+  const pageIndicator =
+    pageNum && !isEnd
+      ? `<text x="540" y="1030" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-family="'Apple SD Gothic Neo', sans-serif" font-size="28">${pageNum} / ${totalPages}</text>`
+      : ""
+
+  const brandTag = isEnd
+    ? `<text x="540" y="${textY + lines.length * lineHeight + 40}" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="'Apple SD Gothic Neo', sans-serif" font-size="32">@petpawpaw.zip</text>`
+    : ""
+
+  return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${width}" height="${height}" fill="rgba(0,0,0,0.55)"/>
+    ${textLines}
+    ${pageIndicator}
+    ${brandTag}
+  </svg>`
+}
+
+function escapeXml(str) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
+}
+
+async function generateCardBuffer(bgBuffer, svgStr) {
+  if (bgBuffer) {
+    const bg = await sharp(bgBuffer)
+      .resize(1080, 1080, { fit: "cover" })
+      .toBuffer()
+    return sharp(bg)
+      .composite([{ input: Buffer.from(svgStr), top: 0, left: 0 }])
+      .jpeg({ quality: 90 })
+      .toBuffer()
+  }
+  return sharp({
+    create: {
+      width: 1080,
+      height: 1080,
+      channels: 3,
+      background: { r: 45, g: 55, b: 72 },
+    },
+  })
+    .composite([{ input: Buffer.from(svgStr), top: 0, left: 0 }])
+    .jpeg({ quality: 90 })
+    .toBuffer()
+}
+
+async function generateCardNews(title, blocks, s3Images, slug) {
+  // 1) gemma3로 핵심 포인트 추출
+  const textContent = blocks
+    .filter((b) => b.type === "paragraph" || b.type === "heading")
+    .map((b) => (b.text || "").replace(/<[^>]+>/g, ""))
+    .join("\n")
+    .slice(0, 3000)
+
+  const prompt = `아래 기사를 읽고, 인스타그램 카드뉴스용 핵심 포인트를 추출해주세요.
+
+규칙:
+- 각 포인트는 20자 이내로 짧고 임팩트 있게
+- 의미 있는 내용만 추출 (억지로 늘리지 마세요)
+- 내용이 충분하면 5~7개, 부족하면 3~4개도 괜찮습니다
+- 번호를 붙여서 출력 (1. 2. 3. ...)
+- 다른 설명 없이 포인트만 출력
+
+기사 제목: ${title}
+
+기사 본문:
+${textContent}`
+
+  log("📱", "카드뉴스 핵심 포인트 추출 중...")
+  const response = await ollamaGenerate(prompt)
+  const points = response
+    .split("\n")
+    .filter((l) => l.match(/^\d+\./))
+    .map((l) => l.replace(/^\d+\.\s*/, "").trim())
+    .filter((l) => l.length > 0 && l.length <= 25)
+    .slice(0, 7)
+
+  if (points.length === 0) {
+    log("⚠️", "카드뉴스 포인트 추출 실패")
+    return []
+  }
+
+  log("📝", `포인트 ${points.length}개 추출 완료`)
+
+  // 2) 배경 이미지 다운로드
+  const outputDir = resolve(__dirname, "..", "card-news", slug)
+  mkdirSync(outputDir, { recursive: true })
+
+  const totalCards = points.length + 2
+  const bgImages = []
+  for (const img of s3Images) {
+    try {
+      const { buffer } = await fetchBuffer(img.url)
+      bgImages.push(buffer)
+    } catch {}
+  }
+  log("🖼️", `배경 이미지 ${bgImages.length}장 다운로드 완료`)
+
+  // 배경 이미지를 카드 수만큼 셔플 배분 (표지 + 포인트 + CTA)
+  const shuffledBg = [...bgImages]
+  for (let i = shuffledBg.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffledBg[i], shuffledBg[j]] = [shuffledBg[j], shuffledBg[i]]
+  }
+  // 카드 수에 맞춰 배경 배열 생성 (이미지 부족하면 순환)
+  const bgForCards = []
+  for (let i = 0; i < totalCards; i++) {
+    if (shuffledBg.length > 0) {
+      bgForCards.push(shuffledBg[i % shuffledBg.length])
+    } else {
+      bgForCards.push(null)
+    }
+  }
+
+  const colors = [
+    { r: 59, g: 130, b: 246 },
+    { r: 16, g: 185, b: 129 },
+    { r: 245, g: 158, b: 11 },
+    { r: 239, g: 68, b: 68 },
+    { r: 139, g: 92, b: 246 },
+    { r: 236, g: 72, b: 153 },
+    { r: 20, g: 184, b: 166 },
+  ]
+
+  const cardBuffers = []
+  const now = new Date()
+  const prefix = `card-news/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${slug}`
+
+  // 카드 1: 표지
+  const titleSvg = buildCardSvg(wrapText(title, 12), {
+    fontSize: 64,
+    lineHeight: 90,
+    isTitle: true,
+    pageNum: "1",
+    totalPages: String(totalCards),
+  })
+  const cover = await generateCardBuffer(bgForCards[0], titleSvg)
+  writeFileSync(resolve(outputDir, "01-cover.jpg"), cover)
+  cardBuffers.push(cover)
+  log("🎨", `카드 1/${totalCards}: 표지`)
+
+  // 카드 2~N: 포인트별 (각각 다른 배경 이미지)
+  for (let i = 0; i < points.length; i++) {
+    const svg = buildCardSvg(wrapText(points[i], 13), {
+      fontSize: 56,
+      lineHeight: 80,
+      pageNum: String(i + 2),
+      totalPages: String(totalCards),
+    })
+    let bg = bgForCards[i + 1]
+    if (!bg) {
+      const c = colors[i % colors.length]
+      bg = await sharp({
+        create: { width: 1080, height: 1080, channels: 3, background: c },
+      })
+        .png()
+        .toBuffer()
+    }
+    const card = await generateCardBuffer(bg, svg)
+    const num = String(i + 2).padStart(2, "0")
+    writeFileSync(resolve(outputDir, `${num}-point.jpg`), card)
+    cardBuffers.push(card)
+    log("🎨", `카드 ${i + 2}/${totalCards}: ${points[i].slice(0, 30)}...`)
+  }
+
+  // 마지막 카드: CTA
+  const endSvg = buildCardSvg(["더 많은 반려동물 이야기", "petpawpaw.net"], {
+    fontSize: 52,
+    lineHeight: 78,
+    isEnd: true,
+  })
+  const lastCard = await generateCardBuffer(
+    bgForCards[totalCards - 1],
+    endSvg
+  )
+  writeFileSync(
+    resolve(outputDir, `${String(totalCards).padStart(2, "0")}-end.jpg`),
+    lastCard
+  )
+  cardBuffers.push(lastCard)
+  log("🎨", `카드 ${totalCards}/${totalCards}: 마무리`)
+
+  // 3) S3 업로드 (Instagram API는 공개 URL 필요)
+  const cardUrls = []
+  for (let i = 0; i < cardBuffers.length; i++) {
+    const key = `${prefix}/${String(i + 1).padStart(2, "0")}.jpg`
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+        Body: cardBuffers[i],
+        ContentType: "image/jpeg",
+      })
+    )
+    const url = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`
+    cardUrls.push(url)
+  }
+  log("☁️", `카드뉴스 ${cardUrls.length}장 S3 업로드 완료`)
+
+  log("✅", `카드뉴스 생성 완료 → card-news/${slug}/`)
+  return cardUrls
+}
+
+// ─── Step 8: Instagram 캐러셀 게시 ────────────────────
+
+const IG_API = "https://graph.instagram.com/v22.0"
+
+async function igApiCall(endpoint, params = {}) {
+  const url = new URL(`${IG_API}${endpoint}`)
+  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN
+  if (!accessToken)
+    throw new Error("INSTAGRAM_ACCESS_TOKEN이 설정되지 않았습니다")
+
+  url.searchParams.set("access_token", accessToken)
+  for (const [k, v] of Object.entries(params)) {
+    url.searchParams.set(k, v)
+  }
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, { method: "POST" }, (res) => {
+      let body = ""
+      res.on("data", (c) => (body += c))
+      res.on("end", () => {
+        try {
+          const json = JSON.parse(body)
+          if (json.error) reject(new Error(json.error.message))
+          else resolve(json)
+        } catch {
+          reject(new Error(body))
+        }
+      })
+    })
+    req.on("error", reject)
+    req.end()
+  })
+}
+
+async function igGet(endpoint) {
+  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN
+  const url = `${IG_API}${endpoint}${endpoint.includes("?") ? "&" : "?"}access_token=${accessToken}`
+
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, (res) => {
+        let body = ""
+        res.on("data", (c) => (body += c))
+        res.on("end", () => {
+          try {
+            resolve(JSON.parse(body))
+          } catch {
+            reject(new Error(body))
+          }
+        })
+      })
+      .on("error", reject)
+  })
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+async function postToInstagram(cardUrls, title, slug) {
+  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN
+  if (!accessToken) {
+    log("⚠️", "INSTAGRAM_ACCESS_TOKEN 미설정, 인스타그램 게시 건너뜀")
+    return
+  }
+
+  log("📸", "Instagram 캐러셀 게시 시작...")
+
+  // 1) 사용자 ID 가져오기
+  const me = await igGet("/me?fields=id,username")
+  const userId = me.id
+  log("📸", `Instagram 계정: @${me.username} (${userId})`)
+
+  // 2) 각 카드를 캐러셀 아이템으로 등록 (최대 10장)
+  const itemIds = []
+  const cardsToPost = cardUrls.slice(0, 10)
+
+  for (let i = 0; i < cardsToPost.length; i++) {
+    log("📤", `카드 ${i + 1}/${cardsToPost.length} 업로드 중...`)
+    const result = await igApiCall(`/${userId}/media`, {
+      image_url: cardsToPost[i],
+      is_carousel_item: "true",
+    })
+    itemIds.push(result.id)
+    await sleep(1000) // API rate limit 방지
+  }
+
+  // 3) 캐러셀 컨테이너 생성
+  const caption = `${title}\n\n🐾 더 많은 반려동물 이야기 → petpawpaw.net\n\n#반려동물 #강아지 #고양이 #펫 #반려견 #petpawpaw`
+  const carousel = await igApiCall(`/${userId}/media`, {
+    media_type: "CAROUSEL",
+    children: itemIds.join(","),
+    caption,
+  })
+  log("📸", `캐러셀 컨테이너 생성: ${carousel.id}`)
+
+  // 4) 게시
+  await sleep(3000) // 미디어 처리 대기
+  const published = await igApiCall(`/${userId}/media_publish`, {
+    creation_id: carousel.id,
+  })
+  log("✅", `Instagram 게시 완료! (media_id: ${published.id})`)
+}
+
+// ─── Step 9: Blogger 포스팅 ────────────────────────────
+
+async function googlePost(url, body, accessToken) {
+  const u = new URL(url)
+  const postData = JSON.stringify(body)
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(u, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(postData),
+      },
+    }, (res) => {
+      let data = ""
+      res.on("data", (c) => (data += c))
+      res.on("end", () => {
+        try {
+          const json = JSON.parse(data)
+          if (json.error) reject(new Error(json.error.message || JSON.stringify(json.error)))
+          else resolve(json)
+        } catch { reject(new Error(data)) }
+      })
+    })
+    req.on("error", reject)
+    req.write(postData)
+    req.end()
+  })
+}
+
+async function googleGet(url, accessToken) {
+  return new Promise((resolve, reject) => {
+    https.get(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }, (res) => {
+      let data = ""
+      res.on("data", (c) => (data += c))
+      res.on("end", () => {
+        try { resolve(JSON.parse(data)) }
+        catch { reject(new Error(data)) }
+      })
+    }).on("error", reject)
+  })
+}
+
+async function getGoogleAccessToken() {
+  const postData = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID,
+    client_secret: process.env.GOOGLE_CLIENT_SECRET,
+    refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+    grant_type: "refresh_token",
+  }).toString()
+
+  return new Promise((resolve, reject) => {
+    const req = https.request("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Length": Buffer.byteLength(postData),
+      },
+    }, (res) => {
+      let body = ""
+      res.on("data", (c) => (body += c))
+      res.on("end", () => {
+        try {
+          const json = JSON.parse(body)
+          if (json.error) reject(new Error(json.error_description || json.error))
+          else resolve(json.access_token)
+        } catch { reject(new Error(body)) }
+      })
+    })
+    req.on("error", reject)
+    req.write(postData)
+    req.end()
+  })
+}
+
+function blocksToHtml(blocks) {
+  return blocks.map((block) => {
+    switch (block.type) {
+      case "paragraph":
+        return `<p>${block.text || ""}</p>`
+      case "heading":
+        if (block.level === 3) return `<h3>${block.text || ""}</h3>`
+        return `<h2>${block.text || ""}</h2>`
+      case "image":
+        return `<div style="text-align:center;margin:20px 0"><img src="${block.url}" alt="${block.alt || ""}" style="max-width:100%;border-radius:8px" />${block.caption ? `<p style="font-size:0.85em;color:#888">${block.caption}</p>` : ""}</div>`
+      case "quote":
+        return `<blockquote style="border-left:3px solid #ccc;padding-left:16px;color:#555;font-style:italic">${block.text || ""}</blockquote>`
+      case "list":
+        const tag = block.ordered ? "ol" : "ul"
+        const items = (block.items || []).map((item) => `<li>${item}</li>`).join("")
+        return `<${tag}>${items}</${tag}>`
+      default:
+        return ""
+    }
+  }).join("\n")
+}
+
+async function postToBlogger(title, blocks, slug) {
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN
+  if (!refreshToken) {
+    log("⚠️", "GOOGLE_REFRESH_TOKEN 미설정, Blogger 게시 건너뜀")
+    return
+  }
+
+  log("📝", "Blogger 게시 시작...")
+
+  // 1) access token 발급
+  const accessToken = await getGoogleAccessToken()
+
+  // 2) Blog ID 확인 (URL 또는 숫자 ID)
+  let blogId = process.env.BLOGGER_BLOG_ID
+  if (blogId && !blogId.match(/^\d+$/)) {
+    // URL로 blog ID 조회
+    const blogUrl = blogId.startsWith("http") ? blogId : `https://${blogId}`
+    const blog = await googleGet(
+      `https://www.googleapis.com/blogger/v3/blogs/byurl?url=${encodeURIComponent(blogUrl)}`,
+      accessToken
+    )
+    blogId = blog.id
+    log("📝", `Blog ID: ${blogId}`)
+  }
+
+  // 3) HTML 변환 + 게시
+  const html = blocksToHtml(blocks)
+  const post = await googlePost(
+    `https://www.googleapis.com/blogger/v3/blogs/${blogId}/posts`,
+    { kind: "blogger#post", title, content: html },
+    accessToken
+  )
+
+  log("✅", `Blogger 게시 완료! → ${post.url}`)
+}
+
 // ─── Main ─────────────────────────────────────────────
 
 function pickRandomUrl() {
@@ -646,7 +1134,9 @@ function pickRandomUrl() {
   }
 
   if (allUrls.length === 0) {
-    console.error("❌ sitemap-urls.json 또는 newsweek-urls.json 파일이 없습니다.")
+    console.error(
+      "❌ sitemap-urls.json 또는 newsweek-urls.json 파일이 없습니다."
+    )
     process.exit(1)
   }
 
@@ -715,14 +1205,20 @@ async function processOne(url, categorySlug) {
   // Step 4.5: 이미지 alt/caption 한글화
   if (s3Images.length > 0) {
     log("🏷️", "이미지 alt/caption 한글 생성 중...")
-    const altList = s3Images.map((img, i) => `${i + 1}. ${img.alt || "이미지"}`).join("\n")
+    const altList = s3Images
+      .map((img, i) => `${i + 1}. ${img.alt || "이미지"}`)
+      .join("\n")
     try {
-      const altPrompt = `아래 이미지 설명들을 한국어로 자연스럽게 번역/개선해주세요.
-각 줄에 번호와 함께 alt 텍스트(간결한 이미지 설명)와 caption(한 문장 설명)을 작성해주세요.
+      const altPrompt = `아래 이미지 설명들을 한국어로 짧게 번역해주세요.
+
+규칙:
+- ALT: 20자 이내, 핵심만 (예: "잠자는 골든 리트리버")
+- CAPTION: 20자 이내, 짧은 설명 (예: "편안하게 낮잠 중인 강아지")
+- 절대 20자를 넘기지 마세요
 
 형식 (반드시 이 형식으로):
-1. ALT: 간결한 설명 | CAPTION: 한 문장 캡션
-2. ALT: 간결한 설명 | CAPTION: 한 문장 캡션
+1. ALT: 짧은설명 | CAPTION: 짧은캡션
+2. ALT: 짧은설명 | CAPTION: 짧은캡션
 
 기사 제목: ${newTitle}
 
@@ -763,6 +1259,29 @@ ${altList}`
   )
   log("✅", `DB 저장 완료!`)
 
+  // Step 7: 카드뉴스 생성
+  console.log("")
+  log("📱", "카드뉴스 생성 시작...")
+  const cardUrls = await generateCardNews(newTitle, blocks, s3Images, post.slug)
+
+  // Step 8: Instagram 캐러셀 게시
+  if (cardUrls && cardUrls.length > 0) {
+    console.log("")
+    try {
+      await postToInstagram(cardUrls, newTitle, post.slug)
+    } catch (err) {
+      log("⚠️", `Instagram 게시 실패: ${err.message}`)
+    }
+  }
+
+  // Step 9: Blogger 게시
+  console.log("")
+  try {
+    await postToBlogger(newTitle, blocks, post.slug)
+  } catch (err) {
+    log("⚠️", `Blogger 게시 실패: ${err.message}`)
+  }
+
   // 완료된 URL을 complete-urls.json에 저장
   markComplete(url)
   log("📋", `complete-urls.json에 저장 완료`)
@@ -782,20 +1301,10 @@ async function main() {
     return
   }
 
-  // 랜덤 모드: 남은 URL이 없을 때까지 반복
-  let round = 1
-  while (true) {
-    const url = pickRandomUrl()
-    console.log(`\n🔄 [${round}번째] ${url}\n`)
-    try {
-      await processOne(url, categorySlug)
-    } catch (err) {
-      log("❌", `오류 발생: ${err.message || err}`)
-      log("⏭️", "해당 URL을 건너뛰고 다음으로 진행합니다.")
-      markComplete(url)
-    }
-    round++
-  }
+  // 랜덤 모드: 1개만 처리
+  const url = pickRandomUrl()
+  console.log(`\n🔄 ${url}\n`)
+  await processOne(url, categorySlug)
 }
 
 main().catch((err) => {
