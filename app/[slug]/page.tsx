@@ -243,7 +243,7 @@ async function PostView({
   const primaryCategory = post.primary_category
   const [relatedPosts, recentPosts] = await Promise.all([
     getRelatedPosts(post.id, post.primary_category_id, 6),
-    getPosts(20),
+    getPosts(19),
   ])
 
   // 사이드바 인기글에서 현재 글 제외
