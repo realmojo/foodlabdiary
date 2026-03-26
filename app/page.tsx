@@ -1,4 +1,3 @@
-import Link from "next/link"
 import Image from "next/image"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -33,7 +32,7 @@ function HeroCard({
         : "min-h-[200px]"
 
   return (
-    <Link
+    <a
       href={`/${post.slug}`}
       className={`group relative flex flex-col justify-end overflow-hidden bg-muted ${heightClass}`}
     >
@@ -72,13 +71,13 @@ function HeroCard({
           </div>
         )}
       </div>
-    </Link>
+    </a>
   )
 }
 
 function PostListItem({ post }: { post: Post }) {
   return (
-    <Link
+    <a
       href={`/${post.slug}`}
       className="group flex gap-4 py-3 first:pt-0 last:pb-0"
     >
@@ -101,13 +100,13 @@ function PostListItem({ post }: { post: Post }) {
           {formatDate(post.published_at)}
         </span>
       </div>
-    </Link>
+    </a>
   )
 }
 
 function SidebarPostItem({ post }: { post: Post }) {
   return (
-    <Link
+    <a
       href={`/${post.slug}`}
       className="group flex gap-3 py-3 first:pt-0 last:pb-0"
     >
@@ -130,7 +129,7 @@ function SidebarPostItem({ post }: { post: Post }) {
           {formatDate(post.published_at)}
         </span>
       </div>
-    </Link>
+    </a>
   )
 }
 
@@ -166,7 +165,7 @@ export default async function HomePage() {
         {/* Category Tab Header */}
         <div className="mb-6 flex items-center gap-1 overflow-x-auto border-b scrollbar-none">
           {categories.slice(0, 6).map((cat, idx) => (
-            <Link
+            <a
               key={cat.slug}
               href={`/${cat.slug}`}
               className={`shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
@@ -176,7 +175,7 @@ export default async function HomePage() {
               }`}
             >
               {cat.name}
-            </Link>
+            </a>
           ))}
         </div>
 
@@ -185,7 +184,7 @@ export default async function HomePage() {
           <div>
             {featuredPost && (
               <div>
-                <Link
+                <a
                   href={`/${featuredPost.slug}`}
                   className="group block"
                 >
@@ -208,7 +207,7 @@ export default async function HomePage() {
                   <h2 className="mt-2 text-lg font-bold leading-tight group-hover:underline">
                     {featuredPost.title}
                   </h2>
-                </Link>
+                </a>
                 <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{featuredPost.author?.name}</span>
                   <span>-</span>
@@ -254,10 +253,10 @@ export default async function HomePage() {
             </div>
             <div className="mt-4">
               <Button variant="outline" size="sm" className="w-full" asChild>
-                <Link href={primaryCategory ? `/${primaryCategory.slug}` : "/"}>
+                <a href={primaryCategory ? `/${primaryCategory.slug}` : "/"}>
                   Load more
                   <ChevronRight className="ml-1 h-3 w-3" />
-                </Link>
+                </a>
               </Button>
             </div>
           </div>

@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import type { Category } from "@/lib/data"
 
 export function MobileNav({ categories }: { categories: Category[] }) {
@@ -47,14 +46,14 @@ export function MobileNav({ categories }: { categories: Category[] }) {
             <ul className="space-y-1">
               {categories.map((cat) => (
                 <li key={cat.slug}>
-                  <Link
+                  <a
                     href={`/${cat.slug}`}
                     onClick={() => setOpen(false)}
                     className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
                   >
                     <span>{cat.emoji}</span>
                     <span>{cat.name}</span>
-                  </Link>
+                  </a>
                 </li>
               ))}
             </ul>
@@ -64,3 +63,4 @@ export function MobileNav({ categories }: { categories: Category[] }) {
     </div>
   )
 }
+

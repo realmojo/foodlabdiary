@@ -1,4 +1,3 @@
-import Link from "next/link"
 import { getCategories } from "@/lib/data"
 
 export async function Footer() {
@@ -11,7 +10,7 @@ export async function Footer() {
         <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr_auto_auto]">
           {/* 브랜드 */}
           <div>
-            <Link href="/" className="flex items-center gap-2 font-bold tracking-tight">
+            <a href="/" className="flex items-center gap-2 font-bold tracking-tight">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 512 512"
@@ -28,7 +27,7 @@ export async function Footer() {
                 </g>
               </svg>
               <span>포우포우</span>
-            </Link>
+            </a>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               반려동물과 함께하는 더 나은 일상을 위한 정보 매거진.<br />
               수의학·영양학 자료를 기반으로 신뢰할 수 있는 콘텐츠를 제공합니다.
@@ -49,12 +48,12 @@ export async function Footer() {
             <ul className="flex flex-wrap gap-2 lg:flex-col lg:gap-2">
               {categories.map((cat) => (
                 <li key={cat.slug}>
-                  <Link
+                  <a
                     href={`/${cat.slug}`}
                     className="inline-block rounded-full border px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:rounded-none lg:border-0 lg:px-0 lg:py-0 lg:text-sm"
                   >
                     {cat.name}
-                  </Link>
+                  </a>
                 </li>
               ))}
             </ul>
@@ -65,14 +64,14 @@ export async function Footer() {
             <h3 className="mb-3 text-sm font-semibold">서비스</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/about" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                <a href="/about" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
                   소개
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href="/contact" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                <a href="/contact" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
                   문의하기
-                </Link>
+                </a>
               </li>
             </ul>
           </div>
@@ -82,14 +81,14 @@ export async function Footer() {
             <h3 className="mb-3 text-sm font-semibold">법적 고지</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/terms" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                <a href="/terms" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
                   이용약관
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href="/privacy" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                <a href="/privacy" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
                   개인정보처리방침
-                </Link>
+                </a>
               </li>
             </ul>
           </div>

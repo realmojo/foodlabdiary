@@ -1,4 +1,3 @@
-import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Clock, User } from "lucide-react"
@@ -8,7 +7,7 @@ export function PostCard({ post }: { post: Post }) {
   const category = post.primary_category
 
   return (
-    <Link href={`/${post.slug}`}>
+    <a href={`/${post.slug}`}>
       <Card className="group h-full transition-colors hover:bg-muted/50">
         <CardContent className="flex h-full flex-col gap-3 p-5">
           <div className="flex items-center gap-2">
@@ -43,6 +42,7 @@ export function PostCard({ post }: { post: Post }) {
           </div>
         </CardContent>
       </Card>
-    </Link>
+    </a>
   )
 }
+

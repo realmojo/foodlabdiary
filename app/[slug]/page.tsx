@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
-import Link from "next/link"
 import { Clock, User, Tag } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -133,7 +132,7 @@ async function CategoryView({ slug }: { slug: string }) {
         {categoryPosts.length > 0 ? (
           <div className="divide-y">
             {categoryPosts.map((post) => (
-              <Link
+              <a
                 key={post.slug}
                 href={`/${post.slug}`}
                 className="group flex gap-4 py-4"
@@ -168,7 +167,7 @@ async function CategoryView({ slug }: { slug: string }) {
                     {post.read_time && <span>{post.read_time} 읽기</span>}
                   </div>
                 </div>
-              </Link>
+              </a>
             ))}
           </div>
         ) : (
@@ -185,7 +184,7 @@ async function CategoryView({ slug }: { slug: string }) {
 
 function SidebarPostItem({ post }: { post: Post }) {
   return (
-    <Link
+    <a
       href={`/${post.slug}`}
       className="group flex gap-3 py-3 first:pt-0 last:pb-0"
     >
@@ -210,7 +209,7 @@ function SidebarPostItem({ post }: { post: Post }) {
           </span>
         )}
       </div>
-    </Link>
+    </a>
   )
 }
 
@@ -277,11 +276,11 @@ async function PostView({
         <article className="min-w-0 pb-12">
           <div className="mb-3 flex flex-wrap gap-2">
             {post.categories?.map((cat) => (
-              <Link key={cat.slug} href={`/${cat.slug}`}>
+              <a key={cat.slug} href={`/${cat.slug}`}>
                 <Badge variant="secondary">
                   {cat.emoji} {cat.name}
                 </Badge>
-              </Link>
+              </a>
             ))}
           </div>
 
@@ -327,9 +326,9 @@ async function PostView({
             <div className="flex items-center gap-2">
               <Tag className="h-3.5 w-3.5 text-muted-foreground" />
               {post.categories?.map((cat) => (
-                <Link key={cat.slug} href={`/${cat.slug}`}>
+                <a key={cat.slug} href={`/${cat.slug}`}>
                   <Badge variant="outline">{cat.name}</Badge>
-                </Link>
+                </a>
               ))}
             </div>
             <ShareButtons
@@ -353,7 +352,7 @@ async function PostView({
             <h2 className="mb-6 text-lg font-bold">추천 콘텐츠</h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               {recommendedPosts.map((rp) => (
-                <Link
+                <a
                   key={rp.slug}
                   href={`/${rp.slug}`}
                   className="group flex gap-4 rounded-md border p-3 transition-colors hover:bg-muted/50"
@@ -383,7 +382,7 @@ async function PostView({
                         new Date(rp.published_at).toLocaleDateString("ko-KR")}
                     </span>
                   </div>
-                </Link>
+                </a>
               ))}
             </div>
           </section>
