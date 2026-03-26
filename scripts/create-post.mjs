@@ -369,44 +369,22 @@ function markdownToBlocks(markdown, s3Images) {
 
   flushParagraph()
 
-  // 2단계: 이미지를 heading 위치 기준으로 균등 배치
+  // 2단계: 이미지를 랜덤 셔플 후 균등 배치
   if (s3Images.length === 0) return blocks
 
-  const headingIndices = blocks
-    .map((b, i) => (b.type === "heading" && b.level === 2 ? i : -1))
-    .filter((i) => i >= 0)
-
-  if (headingIndices.length === 0) {
-    // heading이 없으면 블록 사이에 균등 배치
-    const gap = Math.max(1, Math.floor(blocks.length / (s3Images.length + 1)))
-    for (let i = s3Images.length - 1; i >= 0; i--) {
-      const img = s3Images[i]
-      const insertAt = Math.min(gap * (i + 1), blocks.length)
-      blocks.splice(insertAt, 0, {
-        type: "image",
-        url: img.url,
-        alt: img.alt || "",
-        caption: img.caption || "",
-      })
-    }
-    return blocks
+  // 이미지 순서 랜덤 셔플 (Fisher-Yates)
+  const shuffled = [...s3Images]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
   }
 
-  // heading 간격에 맞춰 이미지를 균등 분배
-  const totalImages = s3Images.length
-  const totalHeadings = headingIndices.length
-  const insertPositions = []
-
-  for (let i = 0; i < totalImages; i++) {
-    const headingIdx = Math.round((i / totalImages) * (totalHeadings - 1))
-    insertPositions.push(headingIndices[headingIdx])
-  }
-
-  // 뒤에서부터 삽입해야 인덱스가 밀리지 않음
-  for (let i = totalImages - 1; i >= 0; i--) {
-    const img = s3Images[i]
-    const afterHeading = insertPositions[i] + 1
-    blocks.splice(afterHeading, 0, {
+  // 블록 사이에 균등 배치
+  const gap = Math.max(1, Math.floor(blocks.length / (shuffled.length + 1)))
+  for (let i = shuffled.length - 1; i >= 0; i--) {
+    const img = shuffled[i]
+    const insertAt = Math.min(gap * (i + 1), blocks.length)
+    blocks.splice(insertAt, 0, {
       type: "image",
       url: img.url,
       alt: img.alt || "",
@@ -419,74 +397,74 @@ function markdownToBlocks(markdown, s3Images) {
 
 // ─── Step 4: 대표이미지 AI 생성 + 원본 이미지 → S3 업로드 ───────
 
-async function generateFeaturedImage(title) {
-  const prompt = `Create a heartwarming, adorable photo of a cute animal related to this topic: "${title}". Style: high-quality pet photography, warm natural lighting, soft bokeh background, emotional and endearing expression, magazine cover quality. The animal should be the clear focal point, looking directly at camera or in a charming pose. No text, no overlays, pure photograph.`
-  log("🎨", `대표 이미지 AI 생성 중 (제목 기반)...`)
-  const response = await ollama.generate({
-    model: "x/z-image-turbo",
-    prompt,
-    options: { temperature: 0.8, num_predict: 4096 },
-    keep_alive: "15m",
-  })
-
-  let rawBuffer = null
-  if (response.image) {
-    rawBuffer = Buffer.from(response.image, "base64")
-  } else if (response.images && response.images.length > 0) {
-    rawBuffer = Buffer.from(response.images[0], "base64")
-  }
-
-  if (!rawBuffer) {
-    log("⚠️", "대표 이미지 생성 실패")
-    return null
-  }
-
-  // 1200x628 (1.91:1) 리사이즈 + webp 변환
-  const webpBuffer = await sharp(rawBuffer)
-    .resize(1200, 628, { fit: "cover" })
-    .webp({ quality: 85 })
-    .toBuffer()
-
-  log("✅", `대표 이미지 생성 완료 (${(webpBuffer.length / 1024).toFixed(0)}KB, 1200x628)`)
-  return webpBuffer
-}
+// async function generateFeaturedImage(title) {
+//   const prompt = `Create a heartwarming, adorable photo of a cute animal related to this topic: "${title}". Style: high-quality pet photography, warm natural lighting, soft bokeh background, emotional and endearing expression, magazine cover quality. The animal should be the clear focal point, looking directly at camera or in a charming pose. No text, no overlays, pure photograph.`
+//   log("🎨", `대표 이미지 AI 생성 중 (제목 기반)...`)
+//   const response = await ollama.generate({
+//     model: "x/z-image-turbo",
+//     prompt,
+//     options: { temperature: 0.8, num_predict: 4096 },
+//     keep_alive: "15m",
+//   })
+//
+//   let rawBuffer = null
+//   if (response.image) {
+//     rawBuffer = Buffer.from(response.image, "base64")
+//   } else if (response.images && response.images.length > 0) {
+//     rawBuffer = Buffer.from(response.images[0], "base64")
+//   }
+//
+//   if (!rawBuffer) {
+//     log("⚠️", "대표 이미지 생성 실패")
+//     return null
+//   }
+//
+//   // 1200x628 (1.91:1) 리사이즈 + webp 변환
+//   const webpBuffer = await sharp(rawBuffer)
+//     .resize(1200, 628, { fit: "cover" })
+//     .webp({ quality: 85 })
+//     .toBuffer()
+//
+//   log("✅", `대표 이미지 생성 완료 (${(webpBuffer.length / 1024).toFixed(0)}KB, 1200x628)`)
+//   return webpBuffer
+// }
 
 async function uploadImagesToS3(images, title) {
   const now = new Date()
   const prefix = `posts/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}`
   const uploaded = [] // [{url, alt, caption}]
 
-  // ── 첫 번째 이미지: 제목 기반 AI 생성 (대표 이미지) ──
-  try {
-    const featuredBuffer = await generateFeaturedImage(title)
-    if (featuredBuffer) {
-      const filename = `${randomUUID().slice(0, 8)}.webp`
-      const key = `${prefix}/${filename}`
-      log("☁️", `대표 이미지 S3 업로드: s3://${S3_BUCKET}/${key}`)
-      await s3.send(
-        new PutObjectCommand({
-          Bucket: S3_BUCKET,
-          Key: key,
-          Body: featuredBuffer,
-          ContentType: "image/webp",
-        })
-      )
-      uploaded.push({
-        url: `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`,
-        alt: title,
-        caption: title,
-      })
-    }
-  } catch (err) {
-    log("⚠️", `대표 이미지 생성/업로드 실패: ${err.message}`)
-  }
+  // // ── 대표 이미지 AI 생성 (비활성화: 메모리 부족) ──
+  // try {
+  //   const featuredBuffer = await generateFeaturedImage(title)
+  //   if (featuredBuffer) {
+  //     const filename = `${randomUUID().slice(0, 8)}.webp`
+  //     const key = `${prefix}/${filename}`
+  //     log("☁️", `대표 이미지 S3 업로드: s3://${S3_BUCKET}/${key}`)
+  //     await s3.send(
+  //       new PutObjectCommand({
+  //         Bucket: S3_BUCKET,
+  //         Key: key,
+  //         Body: featuredBuffer,
+  //         ContentType: "image/webp",
+  //       })
+  //     )
+  //     uploaded.push({
+  //       url: `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`,
+  //       alt: title,
+  //       caption: title,
+  //     })
+  //   }
+  // } catch (err) {
+  //   log("⚠️", `대표 이미지 생성/업로드 실패: ${err.message}`)
+  // }
+  //
+  // // x/z-image-turbo 언로드
+  // try {
+  //   await ollama.generate({ model: "x/z-image-turbo", prompt: "", keep_alive: 0 })
+  // } catch {}
 
-  // x/z-image-turbo 언로드 → VRAM 확보
-  try {
-    await ollama.generate({ model: "x/z-image-turbo", prompt: "", keep_alive: 0 })
-  } catch {}
-
-  // ── 나머지 이미지: 원본 다운로드 → webp 변환 → S3 업로드 ──
+  // ── 원본 이미지 다운로드 → webp 변환 → S3 업로드 ──
   for (let i = 0; i < images.length; i++) {
     const { url, alt } = images[i]
     log(
