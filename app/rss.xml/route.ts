@@ -1,5 +1,7 @@
 import { getPosts } from "@/lib/data"
 
+export const dynamic = "force-dynamic"
+
 export async function GET() {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://foodlabdiary.com"
   const posts = await getPosts(50)

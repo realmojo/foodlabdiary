@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next"
 import { getPosts, getCategories } from "@/lib/data"
 
+export const dynamic = "force-dynamic"
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://foodlabdiary.com"
 

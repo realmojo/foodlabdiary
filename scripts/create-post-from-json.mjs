@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * JSON 데이터 → Replicate 이미지 생성 → S3 업로드 → Supabase 포스트 생성
+ * JSON 데이터 → Ollama 이미지 생성 → S3 업로드 → Supabase 포스트 생성
  *
  * 사용법:
  *   node scripts/create-post-from-json.mjs <json파일> [카테고리slug]
@@ -10,7 +10,6 @@
  *   node scripts/create-post-from-json.mjs input.json health
  *
  * 환경변수 필요:
- *   REPLICATE_API_TOKEN  — Replicate API 토큰
  *   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
  *   NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY
  */
@@ -28,13 +27,14 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
 import { createClient } from "@supabase/supabase-js"
 import { randomUUID } from "crypto"
 import sharp from "sharp"
-import Replicate from "replicate"
+import { Ollama } from "ollama"
 
 // ─── Config ───────────────────────────────────────────
 const S3_BUCKET = "foodlabdiary"
 const S3_REGION = process.env.AWS_REGION || "ap-northeast-2"
+const IMAGE_MODEL = "x/z-image-turbo"
 
-const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN })
+const ollama = new Ollama()
 
 const s3 = new S3Client({
   region: S3_REGION,
@@ -59,40 +59,37 @@ function convertInlineMarkdown(text) {
   return text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
 }
 
-// ─── Replicate 이미지 생성 ────────────────────────────
+// ─── Ollama 이미지 생성 ──────────────────────────────
 
-async function generateImage(prompt, maxRetries = 5) {
-  log("🎨", `이미지 생성 중: ${prompt.slice(0, 60)}...`)
+async function generateImage(prompt) {
+  log("🎨", `이미지 생성 중 (${IMAGE_MODEL}): ${prompt.slice(0, 60)}...`)
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const output = await replicate.run("black-forest-labs/flux-schnell", {
-        input: {
-          prompt,
-          num_outputs: 1,
-          aspect_ratio: "16:9",
-          output_format: "webp",
-          output_quality: 80,
-        },
-      })
+  const response = await ollama.generate({
+    model: IMAGE_MODEL,
+    prompt,
+    options: { temperature: 0.8, num_predict: 4096 },
+    keep_alive: "15m",
+  })
 
-      const imageUrl = output[0]?.url?.() || output[0]
-      const response = await fetch(imageUrl)
-      const arrayBuffer = await response.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
-
-      log("✅", `이미지 생성 완료 (${(buffer.length / 1024).toFixed(0)}KB)`)
-      return buffer
-    } catch (err) {
-      if (err.message?.includes("429") && attempt < maxRetries) {
-        const wait = attempt * 3
-        log("⏳", `Rate limit — ${wait}초 대기 후 재시도 (${attempt}/${maxRetries})`)
-        await new Promise((r) => setTimeout(r, wait * 1000))
-      } else {
-        throw err
-      }
-    }
+  let rawBuffer = null
+  if (response.image) {
+    rawBuffer = Buffer.from(response.image, "base64")
+  } else if (response.images && response.images.length > 0) {
+    rawBuffer = Buffer.from(response.images[0], "base64")
   }
+
+  if (!rawBuffer) {
+    throw new Error("이미지 생성 결과 없음")
+  }
+
+  // 1200x628 (16:9) 리사이즈 + webp 변환
+  const webpBuffer = await sharp(rawBuffer)
+    .resize(1200, 628, { fit: "cover" })
+    .webp({ quality: 85 })
+    .toBuffer()
+
+  log("✅", `이미지 생성 완료 (${(webpBuffer.length / 1024).toFixed(0)}KB, 1200x628)`)
+  return webpBuffer
 }
 
 // ─── S3 업로드 ────────────────────────────────────────
@@ -295,7 +292,7 @@ async function main() {
     index: i,
   })).filter((p) => p.prompt)
 
-  log("🎨", `이미지 ${imagePrompts.length}장 생성 시작 (Replicate Flux Schnell)`)
+  log("🎨", `이미지 ${imagePrompts.length}장 생성 시작 (Ollama ${IMAGE_MODEL})`)
 
   // 2) 이미지 생성 + S3 업로드
   const s3Images = []
