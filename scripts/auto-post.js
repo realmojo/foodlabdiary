@@ -295,7 +295,7 @@ async function enrichContents(title, contents) {
     log("🖼️", `[${i + 1}/${contents.length}] ${imagePrompt.slice(0, 60)}...`)
   }
 
-  // 2-5. 카테고리 판단 (health / diet)
+  // 2-5. 카테고리 판단 (health / diet) + 음식 관련이면 식단도 추가
   log("🏷️", "카테고리 판단 중...")
   const categoryPrompt = `아래 기사 제목을 보고 카테고리를 판단해주세요.
 
@@ -315,10 +315,31 @@ async function enrichContents(title, contents) {
     options: { temperature: 0.1 },
   })
   const detectedCategory = catRes.response.trim().toLowerCase()
-  const categorySlug = detectedCategory === "diet" ? "diet" : "health"
-  log("🏷️", `카테고리: ${categorySlug}`)
+  const primarySlug = detectedCategory === "diet" ? "diet" : "health"
 
-  return { title: finalTitle, contents, categorySlug }
+  // 음식 관련 여부 판단 → 식단 카테고리 추가
+  const foodCheckPrompt = `아래 기사 제목이 음식, 식품, 요리, 식재료, 먹는 것과 관련이 있으면 "yes", 아니면 "no"만 출력하세요.
+
+제목: ${finalTitle}
+
+규칙:
+- yes 또는 no 중 하나만 출력
+- 다른 텍스트 없이 출력`
+
+  const foodRes = await ollama.generate({
+    model: "qwen2.5",
+    prompt: foodCheckPrompt,
+    options: { temperature: 0.1 },
+  })
+  const isFood = foodRes.response.trim().toLowerCase().startsWith("yes")
+
+  const categorySlugs = [primarySlug]
+  if (isFood && !categorySlugs.includes("diet")) {
+    categorySlugs.push("diet")
+  }
+  log("🏷️", `카테고리: ${categorySlugs.join(", ")}`)
+
+  return { title: finalTitle, contents, categorySlugs }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -458,27 +479,34 @@ function jsonToBlocks(contents, s3Images) {
 
 const AUTHOR_SLUGS = ["park-sooa", "park-inyeong", "lee-sumin", "choi-jinhee", "kim-somin"]
 
-async function insertPost(title, blocks, s3Images, categorySlug) {
+async function insertPost(title, blocks, s3Images, categorySlugs) {
   const pickedSlug = AUTHOR_SLUGS[Math.floor(Math.random() * AUTHOR_SLUGS.length)]
   const { data: author } = await supabase.from("foodlabdiary_authors").select("id").eq("slug", pickedSlug).single()
   if (!author) throw new Error(`작성자를 찾을 수 없습니다: ${pickedSlug}`)
 
-  let { data: category } = await supabase.from("foodlabdiary_categories").select("id, slug").eq("slug", categorySlug || "health").maybeSingle()
-  if (!category) {
-    const { data } = await supabase.from("foodlabdiary_categories").select("id, slug").order("sort_order").limit(1).single()
-    category = data
+  // 모든 카테고리 조회
+  const categories = []
+  for (const slug of categorySlugs) {
+    const { data: cat } = await supabase.from("foodlabdiary_categories").select("id, slug").eq("slug", slug).maybeSingle()
+    if (cat) categories.push(cat)
   }
-  if (!category) throw new Error(`카테고리를 찾을 수 없습니다: ${categorySlug}`)
+  if (categories.length === 0) {
+    const { data } = await supabase.from("foodlabdiary_categories").select("id, slug").order("sort_order").limit(1).single()
+    if (data) categories.push(data)
+  }
+  if (categories.length === 0) throw new Error(`카테고리를 찾을 수 없습니다: ${categorySlugs.join(", ")}`)
+
+  const primaryCategory = categories[0]
 
   // 제목을 영어로 번역하여 slug 생성
-  let slug = ""
+  let postSlug = ""
   try {
     const slugRes = await ollama.generate({
       model: "qwen2.5",
       prompt: `Translate the following Korean title to a short English slug (3-6 words, lowercase, no special characters). Output ONLY the English words separated by spaces, nothing else.\n\nTitle: ${title}`,
       options: { temperature: 0.3 },
     })
-    slug = slugRes.response.trim()
+    postSlug = slugRes.response.trim()
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, "")
       .replace(/\s+/g, "-")
@@ -486,32 +514,34 @@ async function insertPost(title, blocks, s3Images, categorySlug) {
       .replace(/^-|-$/g, "")
       .slice(0, 80)
   } catch {
-    slug = `post-${randomUUID().slice(0, 8)}`
+    postSlug = `post-${randomUUID().slice(0, 8)}`
   }
-  if (!slug) slug = `post-${randomUUID().slice(0, 8)}`
+  if (!postSlug) postSlug = `post-${randomUUID().slice(0, 8)}`
   const featuredImage = s3Images.length > 0 ? s3Images[0].url : null
   const totalChars = blocks.filter((b) => b.text).reduce((sum, b) => sum + b.text.length, 0)
   const readTime = `${Math.max(1, Math.round(totalChars / 500))}분`
 
   const postData = {
-    title, slug, content: blocks, author_id: author.id,
-    primary_category_id: category.id, featured_image_url: featuredImage,
+    title, slug: postSlug, content: blocks, author_id: author.id,
+    primary_category_id: primaryCategory.id, featured_image_url: featuredImage,
     status: "published", read_time: readTime, published_at: randomDate().toISOString(),
   }
 
   const { data: post, error } = await supabase.from("foodlabdiary_posts").insert(postData).select("id, slug").single()
   if (error) {
     if (error.code === "23505") {
-      postData.slug = `${slug}-${randomUUID().slice(0, 4)}`
+      postData.slug = `${postSlug}-${randomUUID().slice(0, 4)}`
       const { data: post2, error: err2 } = await supabase.from("foodlabdiary_posts").insert(postData).select("id, slug").single()
       if (err2) throw err2
-      await supabase.from("foodlabdiary_post_categories").insert({ post_id: post2.id, category_id: category.id })
+      const catRows = categories.map((c) => ({ post_id: post2.id, category_id: c.id }))
+      await supabase.from("foodlabdiary_post_categories").insert(catRows)
       return post2
     }
     throw error
   }
 
-  await supabase.from("foodlabdiary_post_categories").insert({ post_id: post.id, category_id: category.id })
+  const catRows = categories.map((c) => ({ post_id: post.id, category_id: c.id }))
+  await supabase.from("foodlabdiary_post_categories").insert(catRows)
   return post
 }
 
@@ -554,7 +584,7 @@ async function main() {
   const raw = await fetchDaumNews(newsUrl)
 
   // STEP 2: Ollama 재창작 + 카테고리 판단
-  const { title, contents, categorySlug } = await enrichContents(raw.title, raw.contents)
+  const { title, contents, categorySlugs } = await enrichContents(raw.title, raw.contents)
 
   // JSON 중간 저장 (디버깅용)
   const jsonPath = resolve(process.cwd(), "input.json")
@@ -587,7 +617,7 @@ async function main() {
   // STEP 4: Supabase 포스팅
   const blocks = jsonToBlocks(contents, s3Images)
   log("💾", "Supabase 포스트 저장 중...")
-  const post = await insertPost(title, blocks, s3Images, categorySlug)
+  const post = await insertPost(title, blocks, s3Images, categorySlugs)
 
   // STEP 5: URL 완료 처리
   markUrlComplete(newsUrl)

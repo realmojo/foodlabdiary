@@ -146,8 +146,17 @@ export default async function HomePage() {
   return (
     <div>
       <WebsiteJsonLd />
+      {/* ===== Tagline ===== */}
+      <div className="mx-auto max-w-6xl px-4 py-10 text-center">
+        <p className="text-2xl font-bold tracking-tight sm:text-3xl">
+          40~50대 중장년을 위한
+        </p>
+        <p className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+          <span className="text-yellow-500">건강</span> · <span className="text-green-500">식단</span> 정보 매거진
+        </p>
+      </div>
       {/* ===== Hero Bento Grid ===== */}
-      <section className="mx-auto max-w-6xl px-4 pt-4">
+      <section className="mx-auto max-w-6xl px-4 pt-2">
         <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 sm:grid-rows-2">
           {heroPosts[0] && <HeroCard post={heroPosts[0]} size="large" />}
           {heroPosts[1] && <HeroCard post={heroPosts[1]} size="medium" />}
