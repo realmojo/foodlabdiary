@@ -65,8 +65,6 @@ function HeroCard({
         </h2>
         {size === "large" && (
           <div className="mt-2 flex items-center gap-2 text-xs text-white/80">
-            <span>{post.author?.name}</span>
-            <span>-</span>
             <span>{formatDate(post.published_at)}</span>
           </div>
         )}
@@ -209,8 +207,6 @@ export default async function HomePage() {
                   </h2>
                 </a>
                 <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{featuredPost.author?.name}</span>
-                  <span>-</span>
                   <span>{formatDate(featuredPost.published_at)}</span>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground line-clamp-3">

@@ -271,16 +271,14 @@ async function enrichContents(title, contents) {
     }
   }
 
-  // 2-4. imagePrompt 영어로 생성
+  // 2-4. imagePrompt 한글로 생성
   log("🖼️", "imagePrompt 생성 중...")
   for (let i = 0; i < contents.length; i++) {
     const subject = contents[i].title || title
-    const promptReq = `You are a prompt engineer for AI image generation.
-Generate a single English image prompt for the following Korean topic.
-The image should be a realistic, high-quality food/health photograph.
-Output ONLY the prompt text, nothing else.
+    const promptReq = `아래 주제에 맞는 AI 이미지 생성 프롬프트를 한국어 한 문장으로 만들어주세요.
+사실적이고 고품질의 음식/건강 사진 스타일. 한 문장만 출력하세요.
 
-Topic: ${subject}`
+주제: ${subject}`
 
     const imgRes = await ollama.generate({
       model: "qwen2.5",
@@ -600,7 +598,22 @@ async function main() {
   log("🆔", `id: ${post.id}`)
 }
 
-main().catch((err) => {
-  console.error("❌ 오류:", err)
-  process.exit(1)
-})
+;(async () => {
+  let round = 1
+  while (true) {
+    const urls = JSON.parse(readFileSync(URLS_FILE, "utf-8"))
+    if (urls.length === 0) {
+      log("🏁", "모든 URL 처리 완료!")
+      break
+    }
+    log("🔄", `===== [${round}회차] 남은 URL: ${urls.length}개 =====`)
+    try {
+      await main()
+    } catch (err) {
+      log("❌", `오류 발생: ${err.message}`)
+      log("⏭️", "10초 후 다음 URL로 계속...")
+      await new Promise((r) => setTimeout(r, 10000))
+    }
+    round++
+  }
+})()
