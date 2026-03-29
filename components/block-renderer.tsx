@@ -1,10 +1,42 @@
 import Image from "next/image"
 import type { ContentBlock } from "@/lib/data"
 
+function reorderBlocks(blocks: ContentBlock[]): ContentBlock[] {
+  const result: ContentBlock[] = []
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]
+    // paragraph → image 순서면 image를 먼저 오도록 swap
+    if (
+      block.type === "paragraph" &&
+      i + 1 < blocks.length &&
+      blocks[i + 1].type === "image"
+    ) {
+      result.push(blocks[i + 1]) // image 먼저
+      result.push(block)          // paragraph 뒤로
+      i += 1
+      continue
+    }
+    result.push(block)
+    // heading 다음에 paragraph → image 순서면 image를 먼저 오도록 swap
+    if (
+      block.type === "heading" &&
+      i + 2 < blocks.length &&
+      blocks[i + 1].type === "paragraph" &&
+      blocks[i + 2].type === "image"
+    ) {
+      result.push(blocks[i + 2]) // image 먼저
+      result.push(blocks[i + 1]) // paragraph 뒤로
+      i += 2
+    }
+  }
+  return result
+}
+
 export function BlockRenderer({ blocks }: { blocks: ContentBlock[] }) {
+  const ordered = reorderBlocks(blocks)
   return (
     <div className="space-y-5">
-      {blocks.map((block, i) => {
+      {ordered.map((block, i) => {
         switch (block.type) {
           case "paragraph":
             return (

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * JSON 데이터 → Ollama 이미지 생성 → S3 업로드 → Supabase 포스트 생성
+ * JSON 데이터 → Google Labs Flow 이미지 생성 → S3 업로드 → Supabase 포스트 생성
  *
  * 사용법:
  *   node scripts/create-post-from-json.mjs <json파일> [카테고리slug]
@@ -16,7 +16,7 @@
 
 import { config } from "dotenv"
 import { fileURLToPath } from "url"
-import { dirname, resolve } from "path"
+import { dirname, resolve, join } from "path"
 import { readFileSync } from "fs"
 
 const __filename = fileURLToPath(import.meta.url)
@@ -27,14 +27,18 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
 import { createClient } from "@supabase/supabase-js"
 import { randomUUID } from "crypto"
 import sharp from "sharp"
-import { Ollama } from "ollama"
+import { chromium } from "playwright-extra"
+import StealthPlugin from "puppeteer-extra-plugin-stealth"
+
+const stealth = StealthPlugin()
+chromium.use(stealth)
 
 // ─── Config ───────────────────────────────────────────
 const S3_BUCKET = "foodlabdiary"
 const S3_REGION = process.env.AWS_REGION || "ap-northeast-2"
-const IMAGE_MODEL = "x/z-image-turbo"
-
-const ollama = new Ollama()
+const LABS_URL =
+  "https://labs.google/fx/ko/tools/flow/project/2bd14e8f-06b8-4839-8492-9df6f09cab0a"
+const AUTH_FILE = join(process.cwd(), "scripts", "gemini-auth.json")
 
 const s3 = new S3Client({
   region: S3_REGION,
@@ -46,7 +50,8 @@ const s3 = new S3Client({
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
 
 // ─── Helpers ──────────────────────────────────────────
@@ -59,36 +64,138 @@ function convertInlineMarkdown(text) {
   return text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
 }
 
-// ─── Ollama 이미지 생성 ──────────────────────────────
+// ─── Google Labs Flow 브라우저 세션 ──────────────────
 
-async function generateImage(prompt) {
-  log("🎨", `이미지 생성 중 (${IMAGE_MODEL}): ${prompt.slice(0, 60)}...`)
-
-  const response = await ollama.generate({
-    model: IMAGE_MODEL,
-    prompt,
-    options: { temperature: 0.8, num_predict: 4096 },
-    keep_alive: "15m",
+async function launchBrowser() {
+  const browser = await chromium.launch({
+    headless: false,
+    channel: "chrome",
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-blink-features=AutomationControlled",
+    ],
+    ignoreDefaultArgs: ["--enable-automation"],
   })
 
-  let rawBuffer = null
-  if (response.image) {
-    rawBuffer = Buffer.from(response.image, "base64")
-  } else if (response.images && response.images.length > 0) {
-    rawBuffer = Buffer.from(response.images[0], "base64")
+  const context = await browser.newContext({
+    storageState: AUTH_FILE,
+    viewport: null,
+  })
+
+  const page = await context.newPage()
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "webdriver", { get: () => undefined })
+  })
+
+  log("🌐", `Google Labs Flow 열기: ${LABS_URL}`)
+  await page.goto(LABS_URL, { waitUntil: "domcontentloaded" })
+
+  // 쿠키 동의 배너가 있으면 클릭
+  const cookieAccept = page.locator(
+    "button.glue-cookie-notification-bar__accept"
+  )
+  try {
+    await cookieAccept.waitFor({ state: "visible", timeout: 3000 })
+    await cookieAccept.click()
+    log("🍪", "쿠키 동의 클릭")
+  } catch {
+    // 배너 없으면 무시
   }
 
-  if (!rawBuffer) {
-    throw new Error("이미지 생성 결과 없음")
+  // "Nano Banana" 드롭다운 → "x1" 탭 선택
+  const nanoBananaBtn = page.locator('button:has-text("Nano Banana")')
+  await nanoBananaBtn.waitFor({ state: "visible", timeout: 15000 })
+  await nanoBananaBtn.click()
+  await page.waitForTimeout(1000)
+
+  const x1Tab = page.locator('button[role="tab"]:has-text("x1")')
+  await x1Tab.waitFor({ state: "visible", timeout: 5000 })
+  await x1Tab.click()
+  await page.waitForTimeout(500)
+
+  // 모달 닫기
+  await page.locator("body").click({ position: { x: 10, y: 10 } })
+  await page.waitForTimeout(500)
+
+  return { browser, context, page }
+}
+
+// ─── Google Labs Flow 이미지 생성 ────────────────────
+
+async function generateImage(page, prompt) {
+  log("🎨", `이미지 생성 중: ${prompt.slice(0, 60)}...`)
+
+  // 기존 이미지 src 목록 기록
+  const allImages = page.locator('img[alt="생성된 이미지"]')
+  const existingSrcs = new Set()
+  const existingCount = await allImages.count()
+  for (let i = 0; i < existingCount; i++) {
+    const src = await allImages.nth(i).getAttribute("src")
+    existingSrcs.add(src)
   }
 
-  // 1200x628 (16:9) 리사이즈 + webp 변환
-  const webpBuffer = await sharp(rawBuffer)
-    .resize(1200, 628, { fit: "cover" })
-    .webp({ quality: 85 })
-    .toBuffer()
+  // 프롬프트 입력 & 전송
+  const editor = page.locator('[data-slate-editor="true"]')
+  await editor.waitFor({ state: "visible", timeout: 15000 })
+  await editor.click()
+  await page.keyboard.type(prompt, { delay: 10 })
+  await page.keyboard.press("Enter")
 
-  log("✅", `이미지 생성 완료 (${(webpBuffer.length / 1024).toFixed(0)}KB, 1200x628)`)
+  // 새 이미지가 나올 때까지 폴링 (최대 2분)
+  const timeout = 120000
+  const start = Date.now()
+  let newImgSrc = null
+  while (!newImgSrc) {
+    if (Date.now() - start > timeout)
+      throw new Error("Image generation timed out")
+    await page.waitForTimeout(3000)
+    const currentCount = await allImages.count()
+    log("⏳", `대기 중... 이미지: ${currentCount}`)
+    for (let i = 0; i < currentCount; i++) {
+      const src = await allImages.nth(i).getAttribute("src")
+      if (!existingSrcs.has(src)) {
+        newImgSrc = src
+        break
+      }
+    }
+  }
+  await page.waitForTimeout(2000)
+
+  // 이미지 다운로드
+  const imageUrl = newImgSrc.startsWith("http")
+    ? newImgSrc
+    : `https://labs.google${newImgSrc}`
+  const response = await page.request.get(imageUrl)
+  const rawBuffer = Buffer.from(await response.body())
+
+  // webp 변환
+  const webpBuffer = await sharp(rawBuffer).webp({ quality: 85 }).toBuffer()
+  log("✅", `이미지 생성 완료 (${(webpBuffer.length / 1024).toFixed(0)}KB)`)
+
+  // 생성된 이미지를 Ctrl+Click → 드롭다운에서 삭제
+  const targetImg = page.locator(`img[src="${newImgSrc}"]`).first()
+  await targetImg.waitFor({ state: "visible", timeout: 5000 })
+  await targetImg.click({ modifiers: ["Control"] })
+  log("🗑️", "이미지 삭제 중...")
+  await page.waitForTimeout(1000)
+
+  const deleteBtn = page.getByRole("menuitem", {
+    name: /삭제|delete|제거|Remove/i,
+  })
+  try {
+    await deleteBtn.waitFor({ state: "visible", timeout: 5000 })
+    await deleteBtn.click()
+  } catch {
+    const altDeleteBtn = page.locator(
+      'button:has-text("삭제"), [role="menuitem"]:has-text("삭제"), button:has-text("Delete")'
+    )
+    await altDeleteBtn.first().waitFor({ state: "visible", timeout: 5000 })
+    await altDeleteBtn.first().click()
+  }
+  await page.waitForTimeout(1000)
+  log("🗑️", "이미지 삭제 완료")
+
   return webpBuffer
 }
 
@@ -98,18 +205,19 @@ async function uploadToS3(buffer, alt, caption) {
   const now = new Date()
   const prefix = `posts/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}`
 
-  const webpBuffer = await sharp(buffer).webp({ quality: 80 }).toBuffer()
-
   const filename = `${randomUUID().slice(0, 8)}.webp`
   const key = `${prefix}/${filename}`
 
-  log("☁️", `S3 업로드: s3://${S3_BUCKET}/${key} (${(webpBuffer.length / 1024).toFixed(0)}KB)`)
+  log(
+    "☁️",
+    `S3 업로드: s3://${S3_BUCKET}/${key} (${(buffer.length / 1024).toFixed(0)}KB)`
+  )
 
   await s3.send(
     new PutObjectCommand({
       Bucket: S3_BUCKET,
       Key: key,
-      Body: webpBuffer,
+      Body: buffer,
       ContentType: "image/webp",
     })
   )
@@ -131,19 +239,11 @@ function jsonToBlocks(contents, s3Images) {
     const item = contents[i]
 
     // 소제목 (첫 번째 항목은 도입부이므로 소제목 없음)
-    if (item.miniTitle) {
+    if (item.title) {
       blocks.push({
         type: "heading",
         level: 2,
-        text: convertInlineMarkdown(item.miniTitle),
-      })
-    }
-
-    // 본문 텍스트
-    if (item.text) {
-      blocks.push({
-        type: "paragraph",
-        text: convertInlineMarkdown(item.text),
+        text: convertInlineMarkdown(item.title),
       })
     }
 
@@ -156,6 +256,14 @@ function jsonToBlocks(contents, s3Images) {
         caption: s3Images[imageIndex].caption,
       })
       imageIndex++
+    }
+
+    // 본문 텍스트
+    if (item.text) {
+      blocks.push({
+        type: "paragraph",
+        text: convertInlineMarkdown(item.text),
+      })
     }
   }
 
@@ -237,7 +345,7 @@ async function insertPost(title, blocks, s3Images, categorySlug) {
         .insert({
           title,
           slug: retrySlug,
-    
+
           content: blocks,
           author_id: author.id,
           primary_category_id: category.id,
@@ -269,8 +377,12 @@ async function insertPost(title, blocks, s3Images, categorySlug) {
 async function main() {
   const args = process.argv.slice(2)
   if (args.length === 0) {
-    console.log("사용법: node scripts/create-post-from-json.mjs <json파일> [카테고리slug]")
-    console.log("예시:   node scripts/create-post-from-json.mjs input.json health")
+    console.log(
+      "사용법: node scripts/create-post-from-json.mjs <json파일> [카테고리slug]"
+    )
+    console.log(
+      "예시:   node scripts/create-post-from-json.mjs input.json health"
+    )
     process.exit(1)
   }
 
@@ -285,26 +397,31 @@ async function main() {
   log("📊", `섹션 수: ${contents.length}`)
 
   // 1) 이미지 프롬프트 수집
-  const imagePrompts = contents.map((item, i) => ({
-    prompt: item.imagesPrompt || item.imagePrompt,
-    alt: item.miniTitle || title,
-    caption: item.miniTitle || "",
-    index: i,
-  })).filter((p) => p.prompt)
+  const imagePrompts = contents
+    .map((item, i) => ({
+      prompt: item.imagesPrompt || item.imagePrompt,
+      alt: item.title || title,
+      caption: item.title || "",
+      index: i,
+    }))
+    .filter((p) => p.prompt)
 
-  log("🎨", `이미지 ${imagePrompts.length}장 생성 시작 (Ollama ${IMAGE_MODEL})`)
+  log("🎨", `이미지 ${imagePrompts.length}장 생성 시작 (Google Labs Flow)`)
 
-  // 2) 이미지 생성 + S3 업로드
+  // 2) 브라우저 실행 & 이미지 생성 + S3 업로드
+  const { browser, context, page } = await launchBrowser()
   const s3Images = []
   for (const { prompt, alt, caption } of imagePrompts) {
     try {
-      const buffer = await generateImage(prompt)
+      const buffer = await generateImage(page, prompt)
       const s3Image = await uploadToS3(buffer, alt, caption)
       s3Images.push(s3Image)
     } catch (err) {
       log("⚠️", `이미지 생성 실패: ${err.message}`)
     }
   }
+  await context.close()
+  await browser.close()
 
   log("✅", `이미지 ${s3Images.length}/${imagePrompts.length}장 업로드 완료`)
 

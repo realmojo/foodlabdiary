@@ -164,7 +164,7 @@ async function CategoryView({ slug }: { slug: string }) {
                     </p>
                   )}
                   <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-                    {post.author && <span>{post.author.name}</span>}
+                    {post.author && <span>{post.author.name} 기자</span>}
                     {post.published_at && (
                       <span>
                         {new Date(post.published_at).toLocaleDateString("ko-KR")}
@@ -294,12 +294,11 @@ async function PostView({
             <h1 className="text-2xl leading-tight font-bold sm:text-3xl">
               {post.title}
             </h1>
-            <p className="mt-3 text-muted-foreground">{post.content?.find((b) => b.type === "paragraph")?.text?.replace(/<[^>]*>/g, "")}</p>
             <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
               {post.author && (
                 <span className="flex items-center gap-1">
                   <User className="h-3.5 w-3.5" />
-                  {post.author.name}
+                  {post.author.name} 기자
                 </span>
               )}
               {post.published_at && (
