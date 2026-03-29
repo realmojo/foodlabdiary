@@ -47,6 +47,11 @@ export const metadata: Metadata = {
     description:
       "건강한 식생활을 위한 영양·식단 정보 매거진",
   },
+  verification: {
+    other: {
+      "naver-site-verification": "2529ba3b47acb83de3a2f84c4c57a7aa90495d77",
+    },
+  },
   robots: {
     index: true,
     follow: true,
