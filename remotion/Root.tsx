@@ -7,28 +7,28 @@ import type { ShortsSlide } from "./types"
 const sampleSlides: ShortsSlide[] = [
   {
     type: "intro",
-    title: "반려동물과 함께하는 더 나은 일상",
-    category: "강아지",
-    author: "포우포우",
+    title: "건강한 식생활을 위한 정보",
+    category: "건강",
+    author: "푸드랩다이어리",
     date: "2026년 3월",
   },
   {
     type: "content",
-    title: "산책 시 주의사항",
-    text: "강아지와 산책할 때는 리드줄 길이를 1.5m 이내로 유지하고, 다른 강아지와의 접촉 시 주인의 허락을 먼저 구해야 합니다.",
+    title: "균형 잡힌 식단의 중요성",
+    text: "하루 세 끼 균형 잡힌 식사를 통해 필요한 영양소를 골고루 섭취하는 것이 건강 유지의 기본입니다. 탄수화물, 단백질, 지방의 비율을 적절히 조절하세요.",
   },
   {
     type: "image",
-    imageUrl: "https://placehold.co/1080x1920/F59E0B/fff?text=Sample",
-    caption: "올바른 리드줄 사용법",
+    imageUrl: "https://placehold.co/1080x1920/16A34A/fff?text=Sample",
+    caption: "균형 잡힌 한 끼 식사",
   },
   {
     type: "quote",
-    text: "반려동물은 가족입니다. 책임감 있는 반려가 행복한 동반자 관계의 시작입니다.",
+    text: "올바른 식습관은 건강한 삶의 시작입니다. 오늘 먹는 음식이 내일의 나를 만듭니다.",
   },
   {
     type: "outro",
-    logoText: "포우포우",
+    logoText: "푸드랩다이어리",
   },
 ]
 

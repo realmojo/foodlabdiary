@@ -214,7 +214,7 @@ export default async function HomePage() {
                   <span>{formatDate(featuredPost.published_at)}</span>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
-                  {featuredPost.excerpt?.replace(/<[^>]*>/g, "")}
+                  {featuredPost.content?.find((b) => b.type === "paragraph")?.text?.replace(/<[^>]*>/g, "")}
                 </p>
                 {/* Pagination arrows */}
                 <div className="mt-4 flex gap-1">

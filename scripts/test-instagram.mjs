@@ -19,7 +19,7 @@ import https from "https"
 const __dirname = dirname(fileURLToPath(import.meta.url))
 config({ path: resolve(__dirname, "..", ".env.local") })
 
-const S3_BUCKET = "petpawpaw"
+const S3_BUCKET = "foodlabdiary"
 const S3_REGION = process.env.AWS_REGION || "ap-northeast-2"
 const IG_API = "https://graph.instagram.com/v22.0"
 
@@ -155,7 +155,7 @@ async function main() {
 
   // 5) 캐러셀 컨테이너 생성
   console.log("\n📸 캐러셀 컨테이너 생성 중...")
-  const caption = `강아지가 꼬리를 흔드는 진짜 이유 5가지 🐾\n\n더 많은 반려동물 이야기 → petpawpaw.net\n\n#반려동물 #강아지 #고양이 #펫 #반려견 #petpawpaw`
+  const caption = `강아지가 꼬리를 흔드는 진짜 이유 5가지 🐾\n\n더 많은 반려동물 이야기 → foodlabdiary.com\n\n#반려동물 #강아지 #고양이 #펫 #반려견 #foodlabdiary`
 
   const carousel = await igPost(`/${me.id}/media`, {
     media_type: "CAROUSEL",

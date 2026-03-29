@@ -9,7 +9,7 @@ import {
 } from "remotion"
 import type { ShortsSlide } from "./types"
 
-const accent = "#F59E0B"
+const accent = "#16A34A"
 const white = "#FFFFFF"
 
 /* ── 애니메이션 헬퍼 ── */
@@ -329,7 +329,7 @@ function OutroSlide({ slide }: { slide: ShortsSlide }) {
             textShadow: "0 2px 12px rgba(0,0,0,0.5)",
           }}
         >
-          {slide.logoText ?? "포우포우"}
+          {slide.logoText ?? "푸드랩다이어리"}
         </h2>
 
         <p
@@ -340,7 +340,7 @@ function OutroSlide({ slide }: { slide: ShortsSlide }) {
             marginTop: 24,
           }}
         >
-          petpawpaw.net
+          foodlabdiary.com
         </p>
 
         <div

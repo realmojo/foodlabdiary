@@ -1,7 +1,7 @@
 import { getPosts } from "@/lib/data"
 
 export async function GET() {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://petpawpaw.net"
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://foodlabdiary.com"
   const posts = await getPosts(50)
 
   const escapeXml = (str: string) =>
@@ -18,7 +18,7 @@ export async function GET() {
       <title>${escapeXml(post.title)}</title>
       <link>${siteUrl}/${post.slug}</link>
       <guid isPermaLink="true">${siteUrl}/${post.slug}</guid>
-      <description>${escapeXml(post.excerpt || "")}</description>
+      <description>${escapeXml(post.content?.find((b) => b.type === "paragraph")?.text?.replace(/<[^>]*>/g, "") || "")}</description>
       <pubDate>${post.published_at ? new Date(post.published_at).toUTCString() : ""}</pubDate>
       ${post.primary_category ? `<category>${escapeXml(post.primary_category.name)}</category>` : ""}
       ${post.author ? `<dc:creator>${escapeXml(post.author.name)}</dc:creator>` : ""}
@@ -29,9 +29,9 @@ export async function GET() {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>포우포우 - 반려동물 정보 매거진</title>
+    <title>푸드랩다이어리 - 건강·식단 정보 매거진</title>
     <link>${siteUrl}</link>
-    <description>강아지, 고양이, 반려동물과 함께하는 더 나은 일상을 위한 정보 매거진</description>
+    <description>건강한 식생활을 위한 영양·식단 정보 매거진</description>
     <language>ko</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <atom:link href="${siteUrl}/rss.xml" rel="self" type="application/rss+xml"/>

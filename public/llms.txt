@@ -1,48 +1,42 @@
-# 포우포우 (pawpaw)
+# 푸드랩다이어리 (foodlabdiary)
 
-> 반려동물과 함께하는 더 나은 일상을 위한 정보 매거진
+> 건강한 식생활을 위한 영양·식단 정보 매거진
 
-포우포우는 강아지, 고양이를 비롯한 반려동물의 건강, 훈련, 영양, 라이프스타일에 관한 신뢰할 수 있는 정보를 제공하는 한국어 반려동물 매거진입니다.
+푸드랩다이어리는 건강 관리, 식단 구성, 영양 정보 등 올바른 식습관을 위한 신뢰할 수 있는 정보를 제공하는 한국어 건강·식단 매거진입니다.
 
 ## 사이트 정보
 
-- 사이트명: 포우포우
-- URL: https://petpawpaw.net
+- 사이트명: 푸드랩다이어리
+- URL: https://foodlabdiary.com
 - 언어: 한국어 (ko-KR)
-- 주제: 반려동물 (강아지, 고양이) 건강, 훈련, 영양, 라이프스타일
+- 주제: 건강, 식단, 영양 정보
 - 콘텐츠 유형: 정보성 매거진 기사
 
 ## 카테고리
 
-- [강아지](/dogs): 강아지 품종, 훈련, 건강 관리에 대한 모든 것
-- [고양이](/cats): 고양이 행동, 건강, 생활 팁 총정리
-- [건강](/health): 반려동물 건강 관리와 질병 예방 가이드
-- [훈련](/training): 효과적인 반려동물 훈련법과 행동 교정
-- [영양](/nutrition): 올바른 사료 선택과 영양 관리 가이드
-- [라이프스타일](/lifestyle): 반려동물과 함께하는 일상, 여행, 용품 리뷰
-- [동물](/animals): 반려동물 감동 사연과 동물 이야기
+- [건강](/health): 건강한 식생활과 영양 정보
+- [식단](/diet): 다양한 식단 구성과 레시피 정보
 
 ## 주요 페이지
 
-- [홈](https://petpawpaw.net/)
-- [소개](https://petpawpaw.net/about)
-- [문의하기](https://petpawpaw.net/contact)
-- [이용약관](https://petpawpaw.net/terms)
-- [개인정보처리방침](https://petpawpaw.net/privacy)
+- [홈](https://foodlabdiary.com/)
+- [소개](https://foodlabdiary.com/about)
+- [문의하기](https://foodlabdiary.com/contact)
+- [이용약관](https://foodlabdiary.com/terms)
+- [개인정보처리방침](https://foodlabdiary.com/privacy)
 
 ## 피드
 
-- [RSS](https://petpawpaw.net/rss.xml)
-- [사이트맵](https://petpawpaw.net/sitemap.xml)
+- [RSS](https://foodlabdiary.com/rss.xml)
+- [사이트맵](https://foodlabdiary.com/sitemap.xml)
 
 ## 콘텐츠 방향
 
-- 반려동물 보호자에게 실생활에서 바로 활용 가능한 정보 제공
+- 실생활에서 바로 활용 가능한 건강·식단 정보 제공
 - 쉽고 명확한 언어로 누구나 이해할 수 있는 콘텐츠 작성
-- 강아지, 고양이 등 반려동물의 일상과 건강에 집중
+- 올바른 식습관과 균형 잡힌 영양 섭취에 집중
 - 최신 트렌드와 유용한 팁을 꾸준히 업데이트
 
 ## 연락처
 
-- 이메일: hello@petpawpaw.net
-- 광고/협업: biz@petpawpaw.net
+- 이메일: strikers1999@kakao.com

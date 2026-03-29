@@ -36,7 +36,7 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://petpawpaw.net"
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://foodlabdiary.com"
 
   const category = await getCategoryBySlug(slug)
   if (category) {
@@ -45,7 +45,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: category.description ?? undefined,
       alternates: { canonical: `/${slug}` },
       openGraph: {
-        title: `${category.name} - 포우포우`,
+        title: `${category.name} - 푸드랩다이어리`,
         description: category.description ?? undefined,
         url: `${siteUrl}/${slug}`,
         type: "website",
@@ -55,17 +55,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const post = await getPostBySlug(slug)
   if (post) {
-    const plainExcerpt = post.excerpt?.replace(/<[^>]*>/g, "") ?? undefined
+    const description = post.content?.find((b) => b.type === "paragraph")?.text?.replace(/<[^>]*>/g, "") ?? undefined
     return {
       title: post.title,
-      description: plainExcerpt,
+      description,
       alternates: { canonical: `/${slug}` },
       openGraph: {
         title: post.title,
-        description: plainExcerpt,
+        description,
         url: `${siteUrl}/${slug}`,
         type: "article",
-        siteName: "포우포우",
+        siteName: "푸드랩다이어리",
         publishedTime: post.published_at ?? undefined,
         authors: post.author?.name ? [post.author.name] : undefined,
         images: post.featured_image_url ? [post.featured_image_url] : undefined,
@@ -73,7 +73,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       twitter: {
         card: "summary_large_image",
         title: post.title,
-        description: plainExcerpt,
+        description,
         images: post.featured_image_url ? [post.featured_image_url] : undefined,
       },
     }
@@ -158,9 +158,9 @@ async function CategoryView({ slug }: { slug: string }) {
                   <h3 className="line-clamp-2 text-sm font-semibold leading-snug group-hover:underline sm:text-base">
                     {post.title}
                   </h3>
-                  {post.excerpt && (
+                  {post.content?.find((b) => b.type === "paragraph")?.text && (
                     <p className="mt-1 hidden text-sm text-muted-foreground line-clamp-1 sm:block">
-                      {post.excerpt?.replace(/<[^>]*>/g, "")}
+                      {post.content?.find((b) => b.type === "paragraph")?.text?.replace(/<[^>]*>/g, "")}
                     </p>
                   )}
                   <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
@@ -294,7 +294,7 @@ async function PostView({
             <h1 className="text-2xl leading-tight font-bold sm:text-3xl">
               {post.title}
             </h1>
-            <p className="mt-3 text-muted-foreground">{post.excerpt?.replace(/<[^>]*>/g, "")}</p>
+            <p className="mt-3 text-muted-foreground">{post.content?.find((b) => b.type === "paragraph")?.text?.replace(/<[^>]*>/g, "")}</p>
             <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
               {post.author && (
                 <span className="flex items-center gap-1">
@@ -338,7 +338,7 @@ async function PostView({
               ))}
             </div>
             <ShareButtons
-              url={`${process.env.NEXT_PUBLIC_SITE_URL || "https://petpawpaw.net"}/${post.slug}`}
+              url={`${process.env.NEXT_PUBLIC_SITE_URL || "https://foodlabdiary.com"}/${post.slug}`}
               title={post.title}
             />
           </div>

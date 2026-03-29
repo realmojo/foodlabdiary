@@ -16,36 +16,36 @@ const fontMono = Geist_Mono({
   variable: "--font-mono",
 })
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://petpawpaw.net"
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://foodlabdiary.com"
 
 export const metadata: Metadata = {
   title: {
-    default: "포우포우 - 반려동물 정보 매거진",
-    template: "%s | 포우포우",
+    default: "푸드랩다이어리 - 건강·식단 정보 매거진",
+    template: "%s | 푸드랩다이어리",
   },
   description:
-    "강아지, 고양이, 반려동물과 함께하는 더 나은 일상을 위한 정보 매거진",
+    "건강한 식생활을 위한 영양·식단 정보 매거진",
   metadataBase: new URL(SITE_URL),
   alternates: {
     canonical: "/",
     types: {
-      "application/rss+xml": [{ url: "/rss.xml", title: "포우포우 RSS 피드" }],
+      "application/rss+xml": [{ url: "/rss.xml", title: "푸드랩다이어리 RSS 피드" }],
     },
   },
   openGraph: {
     type: "website",
     locale: "ko_KR",
-    siteName: "포우포우",
-    title: "포우포우 - 반려동물 정보 매거진",
+    siteName: "푸드랩다이어리",
+    title: "푸드랩다이어리 - 건강·식단 정보 매거진",
     description:
-      "강아지, 고양이, 반려동물과 함께하는 더 나은 일상을 위한 정보 매거진",
+      "건강한 식생활을 위한 영양·식단 정보 매거진",
     url: SITE_URL,
   },
   twitter: {
     card: "summary_large_image",
-    title: "포우포우 - 반려동물 정보 매거진",
+    title: "푸드랩다이어리 - 건강·식단 정보 매거진",
     description:
-      "강아지, 고양이, 반려동물과 함께하는 더 나은 일상을 위한 정보 매거진",
+      "건강한 식생활을 위한 영양·식단 정보 매거진",
   },
   robots: {
     index: true,
@@ -80,19 +80,19 @@ export default function RootLayout({
       )}
     >
       <head>
-        <link rel="preconnect" href="https://petpawpaw.s3.ap-northeast-2.amazonaws.com" />
-        <link rel="dns-prefetch" href="https://petpawpaw.s3.ap-northeast-2.amazonaws.com" />
+        <link rel="preconnect" href="https://foodlabdiary.s3.ap-northeast-2.amazonaws.com" />
+        <link rel="dns-prefetch" href="https://foodlabdiary.s3.ap-northeast-2.amazonaws.com" />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#F59E0B" />
+        <meta name="theme-color" content="#16A34A" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="포우포우" />
+        <meta name="apple-mobile-web-app-title" content="푸드랩다이어리" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <link rel="author" href="/about" />
         <link
           rel="alternate"
           type="application/rss+xml"
-          title="포우포우 RSS 피드"
+          title="푸드랩다이어리 RSS 피드"
           href="/rss.xml"
         />
         <Script

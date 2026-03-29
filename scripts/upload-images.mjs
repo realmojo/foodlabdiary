@@ -9,7 +9,7 @@ const s3 = new S3Client({
   },
 })
 
-const BUCKET = "petpawpaw"
+const BUCKET = "foodlabdiary"
 
 function fetchBuffer(url) {
   return new Promise((resolve, reject) => {

@@ -21,12 +21,6 @@
       "Bash(ollama list:*)",
       "Bash(node scripts/create-post.mjs \"https://petniverse.co.kr/%ec%9d%b4-%ec%a0%95%eb%8f%84%eb%8a%94-%ea%b4%9c%ec%b0%ae%ea%b2%a0%ec%a7%80-%ed%95%98%ec%a7%80%eb%a7%8c-%eb%b0%98%eb%a0%a4%eb%8f%99%eb%ac%bc%ec%9d%80-%eb%b2%8c%ec%8d%a8-%ec%b6%94%ec%9b%8c%ed%95%98/\" dogs)",
       "Bash(node:*)",
-      "Bash(find /Users/gshs/Desktop/m/pawpaw -type f -name robots.* -o -name sitemap.* -o -name *feed* -o -name *opengraph* -o -name *twitter*)",
-      "Bash(find /Users/gshs/Desktop/m/pawpaw/app -name *opengraph* -o -name *twitter* -o -name *image*)",
-      "Bash(grep -r robots /Users/gshs/Desktop/m/pawpaw/app --include=*.ts --include=*.tsx)",
-      "Bash(ls -la /Users/gshs/Desktop/m/pawpaw/*.ts /Users/gshs/Desktop/m/pawpaw/*.tsx /Users/gshs/Desktop/m/pawpaw/*.json)",
-      "Bash(grep -r \"generateMetadata\\\\|Metadata\\\\|openGraph\\\\|twitter\" /Users/gshs/Desktop/m/pawpaw/app --include=*.tsx --include=*.ts)",
-      "Bash(find /Users/gshs/Desktop/m/pawpaw/components -type f -name *.tsx -o -name *.ts)",
       "Bash(git status:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
@@ -37,9 +31,12 @@
       "Bash(python3:*)",
       "Bash(rsvg-convert -w 192 -h 192 app/icon.svg -o public/icon-192.png)",
       "Bash(rsvg-convert -w 512 -h 512 app/icon.svg -o public/icon-512.png)",
-      "Bash(grep SUPABASE_URL /Users/gshs/Desktop/m/pawpaw/.env*)",
-      "WebFetch(domain:petpawpaw.net)",
-      "Bash(git diff:*)"
+      "Bash(git diff:*)",
+      "mcp__claude_ai_Supabase__list_tables",
+      "Read(//Users/realmojo/Desktop/m/**)",
+      "Bash(npm ls:*)",
+      "Bash(jobs -l)",
+      "Bash(find /Users/realmojo/Desktop/m/foodlabdiary -type f \\\\\\(-name *.sql -o -name *schema* -o -name *migration* \\\\\\))"
     ]
   }
 }

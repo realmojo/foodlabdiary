@@ -34,7 +34,6 @@ export interface Post {
   id: string
   title: string
   slug: string
-  excerpt: string | null
   content: ContentBlock[]
   author_id: string
   primary_category_id: string
@@ -54,7 +53,7 @@ export interface Post {
 
 export async function getCategories(): Promise<Category[]> {
   const { data } = await supabase
-    .from("pawpaw_categories")
+    .from("foodlabdiary_categories")
     .select("*")
     .order("sort_order")
   return data ?? []
@@ -62,7 +61,7 @@ export async function getCategories(): Promise<Category[]> {
 
 export async function getCategoryBySlug(slug: string): Promise<Category | null> {
   const { data } = await supabase
-    .from("pawpaw_categories")
+    .from("foodlabdiary_categories")
     .select("*")
     .eq("slug", slug)
     .single()
@@ -71,7 +70,7 @@ export async function getCategoryBySlug(slug: string): Promise<Category | null> 
 
 export async function getCategoryPostCount(categoryId: string): Promise<number> {
   const { count } = await supabase
-    .from("pawpaw_post_categories")
+    .from("foodlabdiary_post_categories")
     .select("*", { count: "exact", head: true })
     .eq("category_id", categoryId)
   return count ?? 0
@@ -81,8 +80,8 @@ export async function getCategoryPostCount(categoryId: string): Promise<number> 
 
 export async function getPosts(limit?: number): Promise<Post[]> {
   let query = supabase
-    .from("pawpaw_posts")
-    .select("*, author:pawpaw_authors(*), primary_category:pawpaw_categories!posts_primary_category_id_fkey(*)")
+    .from("foodlabdiary_posts")
+    .select("*, author:foodlabdiary_authors(*), primary_category:foodlabdiary_categories!foodlabdiary_posts_primary_category_id_fkey(*)")
     .eq("status", "published")
     .order("published_at", { ascending: false })
 
@@ -94,8 +93,8 @@ export async function getPosts(limit?: number): Promise<Post[]> {
 
 export async function getPostBySlug(slug: string): Promise<Post | null> {
   const { data: post, error } = await supabase
-    .from("pawpaw_posts")
-    .select("*, author:pawpaw_authors(*), primary_category:pawpaw_categories!posts_primary_category_id_fkey(*)")
+    .from("foodlabdiary_posts")
+    .select("*, author:foodlabdiary_authors(*), primary_category:foodlabdiary_categories!foodlabdiary_posts_primary_category_id_fkey(*)")
     .eq("slug", slug)
     .eq("status", "published")
     .single()
@@ -108,8 +107,8 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
 
   // fetch all categories for this post via junction table
   const { data: postCats } = await supabase
-    .from("pawpaw_post_categories")
-    .select("category:pawpaw_categories!post_categories_category_id_fkey(*)")
+    .from("foodlabdiary_post_categories")
+    .select("category:foodlabdiary_categories!foodlabdiary_post_categories_category_id_fkey(*)")
     .eq("post_id", post.id)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -120,7 +119,7 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
 
 export async function getPostsByCategory(categoryId: string): Promise<Post[]> {
   const { data: postIds } = await supabase
-    .from("pawpaw_post_categories")
+    .from("foodlabdiary_post_categories")
     .select("post_id")
     .eq("category_id", categoryId)
 
@@ -129,8 +128,8 @@ export async function getPostsByCategory(categoryId: string): Promise<Post[]> {
   const ids = postIds.map((r) => r.post_id)
 
   const { data } = await supabase
-    .from("pawpaw_posts")
-    .select("*, author:pawpaw_authors(*), primary_category:pawpaw_categories!posts_primary_category_id_fkey(*)")
+    .from("foodlabdiary_posts")
+    .select("*, author:foodlabdiary_authors(*), primary_category:foodlabdiary_categories!foodlabdiary_posts_primary_category_id_fkey(*)")
     .eq("status", "published")
     .in("id", ids)
     .order("published_at", { ascending: false })
@@ -144,7 +143,7 @@ export async function getRelatedPosts(
   limit = 3,
 ): Promise<Post[]> {
   const { data: postIds } = await supabase
-    .from("pawpaw_post_categories")
+    .from("foodlabdiary_post_categories")
     .select("post_id")
     .eq("category_id", categoryId)
 
@@ -157,8 +156,8 @@ export async function getRelatedPosts(
   if (ids.length === 0) return []
 
   const { data } = await supabase
-    .from("pawpaw_posts")
-    .select("*, author:pawpaw_authors(*), primary_category:pawpaw_categories!posts_primary_category_id_fkey(*)")
+    .from("foodlabdiary_posts")
+    .select("*, author:foodlabdiary_authors(*), primary_category:foodlabdiary_categories!foodlabdiary_posts_primary_category_id_fkey(*)")
     .eq("status", "published")
     .in("id", ids)
     .order("published_at", { ascending: false })
@@ -171,7 +170,7 @@ export async function getRelatedPosts(
 
 export async function getAllPostSlugs(): Promise<string[]> {
   const { data } = await supabase
-    .from("pawpaw_posts")
+    .from("foodlabdiary_posts")
     .select("slug")
     .eq("status", "published")
   return data?.map((p) => p.slug) ?? []
@@ -179,7 +178,7 @@ export async function getAllPostSlugs(): Promise<string[]> {
 
 export async function getAllCategorySlugs(): Promise<string[]> {
   const { data } = await supabase
-    .from("pawpaw_categories")
+    .from("foodlabdiary_categories")
     .select("slug")
   return data?.map((c) => c.slug) ?? []
 }

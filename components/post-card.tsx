@@ -21,7 +21,7 @@ export function PostCard({ post }: { post: Post }) {
             {post.title}
           </h3>
           <p className="flex-1 text-sm text-muted-foreground line-clamp-2">
-            {post.excerpt?.replace(/<[^>]*>/g, "")}
+            {post.content?.find((b) => b.type === "paragraph")?.text?.replace(/<[^>]*>/g, "")}
           </p>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             {post.author && (

@@ -6,7 +6,7 @@ import { FAQJsonLd } from "@/components/json-ld"
 
 export const metadata: Metadata = {
   title: "문의하기",
-  description: "pawpaw에 문의사항, 제안, 광고 협업 등을 보내주세요.",
+  description: "푸드랩다이어리에 문의사항, 제안, 광고 협업 등을 보내주세요.",
   alternates: { canonical: "/contact" },
 }
 
@@ -18,17 +18,17 @@ export default function ContactPage() {
           {
             question: "콘텐츠에 오류가 있어요. 어떻게 제보하나요?",
             answer:
-              "hello@petpawpaw.net으로 해당 글의 URL과 함께 수정이 필요한 내용을 보내주시면 확인 후 빠르게 반영하겠습니다.",
+              "strikers1999@kakao.com으로 해당 글의 URL과 함께 수정이 필요한 내용을 보내주시면 확인 후 빠르게 반영하겠습니다.",
           },
           {
             question: "기고를 하고 싶은데 어떻게 하나요?",
             answer:
-              "수의사, 훈련사, 반려동물 전문가분들의 기고를 환영합니다. biz@petpawpaw.net으로 간단한 자기소개와 기고 주제를 보내주세요.",
+              "편집자, 기자, 에디터분들의 기고를 환영합니다. strikers1999@kakao.com으로 간단한 자기소개와 기고 주제를 보내주세요.",
           },
           {
             question: "콘텐츠를 다른 곳에 퍼가도 되나요?",
             answer:
-              "포우포우의 콘텐츠는 저작권으로 보호됩니다. 출처를 명확히 밝히고 원문 링크를 포함하는 경우 일부 인용이 가능합니다. 전문 게재를 원하시면 사전에 문의해주세요.",
+              "푸드랩다이어리의 콘텐츠는 저작권으로 보호됩니다. 출처를 명확히 밝히고 원문 링크를 포함하는 경우 일부 인용이 가능합니다. 전문 게재를 원하시면 사전에 문의해주세요.",
           },
         ]}
       />
@@ -48,7 +48,7 @@ export default function ContactPage() {
               <p className="mt-1 text-sm text-muted-foreground">
                 일반 문의, 콘텐츠 제안, 오류 제보
               </p>
-              <p className="mt-2 text-sm font-medium">hello@petpawpaw.net</p>
+              <p className="mt-2 text-sm font-medium">strikers1999@kakao.com</p>
             </div>
           </CardContent>
         </Card>
@@ -61,7 +61,7 @@ export default function ContactPage() {
               <p className="mt-1 text-sm text-muted-foreground">
                 광고 게재, 브랜드 협업, 기고 제안
               </p>
-              <p className="mt-2 text-sm font-medium">biz@petpawpaw.net</p>
+              <p className="mt-2 text-sm font-medium">strikers1999@kakao.com</p>
             </div>
           </CardContent>
         </Card>
@@ -94,7 +94,7 @@ export default function ContactPage() {
               콘텐츠에 오류가 있어요. 어떻게 제보하나요?
             </h3>
             <p className="mt-1">
-              hello@petpawpaw.net로 해당 글의 URL과 함께 수정이 필요한 내용을
+              strikers1999@kakao.com으로 해당 글의 URL과 함께 수정이 필요한 내용을
               보내주시면 확인 후 빠르게 반영하겠습니다.
             </p>
           </div>
@@ -103,8 +103,8 @@ export default function ContactPage() {
               기고를 하고 싶은데 어떻게 하나요?
             </h3>
             <p className="mt-1">
-              수의사, 훈련사, 반려동물 전문가분들의 기고를 환영합니다.
-              biz@petpawpaw.net로 간단한 자기소개와 기고 주제를 보내주세요.
+              편집자, 기자, 에디터분들의 기고를 환영합니다.
+              strikers1999@kakao.com으로 간단한 자기소개와 기고 주제를 보내주세요.
             </p>
           </div>
           <div>
@@ -112,7 +112,7 @@ export default function ContactPage() {
               콘텐츠를 다른 곳에 퍼가도 되나요?
             </h3>
             <p className="mt-1">
-              pawpaw의 콘텐츠는 저작권으로 보호됩니다. 출처를 명확히 밝히고 원문
+              푸드랩다이어리의 콘텐츠는 저작권으로 보호됩니다. 출처를 명확히 밝히고 원문
               링크를 포함하는 경우 일부 인용이 가능합니다. 전문 게재를 원하시면
               사전에 문의해주세요.
             </p>

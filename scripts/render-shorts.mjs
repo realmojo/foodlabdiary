@@ -35,9 +35,9 @@ if (!slug) {
 console.log(`📰 포스트 로딩: ${slug}`)
 
 const { data: post, error } = await supabase
-  .from("pawpaw_posts")
+  .from("foodlabdiary_posts")
   .select(
-    "*, author:pawpaw_authors(*), primary_category:pawpaw_categories!posts_primary_category_id_fkey(*)"
+    "*, author:foodlabdiary_authors(*), primary_category:foodlabdiary_categories!posts_primary_category_id_fkey(*)"
   )
   .eq("slug", slug)
   .single()
@@ -49,8 +49,8 @@ if (error || !post) {
 
 // junction 테이블에서 카테고리
 const { data: postCats } = await supabase
-  .from("pawpaw_post_categories")
-  .select("category:pawpaw_categories!post_categories_category_id_fkey(*)")
+  .from("foodlabdiary_post_categories")
+  .select("category:foodlabdiary_categories!post_categories_category_id_fkey(*)")
   .eq("post_id", post.id)
 
 post.categories = postCats?.map((pc) => pc.category) ?? []
@@ -149,7 +149,7 @@ function postToSlides(post) {
   // Outro — 첫 번째 이미지를 배경으로
   slides.push({
     type: "outro",
-    logoText: "포우포우",
+    logoText: "푸드랩다이어리",
     backgroundUrl: allImages[0] ?? undefined,
   })
 

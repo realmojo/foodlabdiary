@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * pawpaw 포스트 자동 생성 스크립트
+ * foodlabdiary 포스트 자동 생성 스크립트
  *
  * 사용법:
  *   node scripts/create-post.mjs <URL> [카테고리slug]
@@ -11,7 +11,7 @@
  *
  * 1) URL에서 원문 제목/본문/이미지 추출
  * 2) Ollama gemma3로 제목+본문 재창작 (3000자 이상)
- * 3) 원본 이미지 → S3 petpawpaw 버킷 업로드
+ * 3) 원본 이미지 → S3 foodlabdiary 버킷 업로드
  * 4) Supabase DB에 포스트 삽입
  */
 
@@ -35,7 +35,7 @@ import sharp from "sharp"
 // ─── Config ───────────────────────────────────────────
 const MODEL = "gemma3"
 const ollama = new Ollama()
-const S3_BUCKET = "petpawpaw"
+const S3_BUCKET = "foodlabdiary"
 const S3_REGION = process.env.AWS_REGION || "ap-northeast-2"
 
 const s3 = new S3Client({
@@ -230,7 +230,7 @@ function extractArticle(html) {
 async function rewriteArticle(title, paragraphs) {
   const originalText = paragraphs.join("\n\n")
 
-  const prompt = `당신은 반려동물 전문 매거진 "포우포우"의 수석 에디터입니다.
+  const prompt = `당신은 반려동물 전문 매거진 "푸드랩다이어리"의 수석 에디터입니다.
 아래 원문 기사의 주제를 참고하여, 완전히 새롭고 독창적인 기사를 작성해주세요.
 
 ## 반드시 지켜야 할 규칙
@@ -527,18 +527,18 @@ async function slugify(title) {
   return `post-${randomUUID().slice(0, 8)}`
 }
 
-async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
+async function insertPost(title, blocks, s3Images, categorySlug) {
   // 작성자: 기본 에디터
   let { data: author } = await supabase
-    .from("pawpaw_authors")
+    .from("foodlabdiary_authors")
     .select("id")
     .eq("slug", "park-sooa")
     .single()
 
   if (!author) {
     const { data } = await supabase
-      .from("pawpaw_authors")
-      .insert({ name: "박수아", slug: "park-sooa", bio: "pawpaw 에디터" })
+      .from("foodlabdiary_authors")
+      .insert({ name: "박수아", slug: "park-sooa", bio: "foodlabdiary 에디터" })
       .select("id")
       .single()
     author = data
@@ -546,7 +546,7 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
 
   // 카테고리
   let { data: category } = await supabase
-    .from("pawpaw_categories")
+    .from("foodlabdiary_categories")
     .select("id, slug")
     .eq("slug", categorySlug || "dogs")
     .single()
@@ -554,7 +554,7 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
   if (!category) {
     // 기본 카테고리
     const { data } = await supabase
-      .from("pawpaw_categories")
+      .from("foodlabdiary_categories")
       .select("id, slug")
       .order("sort_order")
       .limit(1)
@@ -572,11 +572,10 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
   const readTime = `${Math.max(1, Math.round(totalChars / 500))}분`
 
   const { data: post, error } = await supabase
-    .from("pawpaw_posts")
+    .from("foodlabdiary_posts")
     .insert({
       title,
       slug,
-      excerpt,
       content: blocks,
       author_id: author.id,
       primary_category_id: category.id,
@@ -593,11 +592,10 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
     if (error.code === "23505") {
       const retrySlug = `${slug}-${randomUUID().slice(0, 4)}`
       const { data: post2, error: err2 } = await supabase
-        .from("pawpaw_posts")
+        .from("foodlabdiary_posts")
         .insert({
           title,
           slug: retrySlug,
-          excerpt,
           content: blocks,
           author_id: author.id,
           primary_category_id: category.id,
@@ -611,7 +609,7 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
       if (err2) throw err2
       // post_categories
       await supabase
-        .from("pawpaw_post_categories")
+        .from("foodlabdiary_post_categories")
         .insert({ post_id: post2.id, category_id: category.id })
       return post2
     }
@@ -620,7 +618,7 @@ async function insertPost(title, excerpt, blocks, s3Images, categorySlug) {
 
   // post_categories
   await supabase
-    .from("pawpaw_post_categories")
+    .from("foodlabdiary_post_categories")
     .insert({ post_id: post.id, category_id: category.id })
 
   return post
@@ -653,24 +651,104 @@ function buildCardSvg(lines, options = {}) {
     isEnd = false,
     pageNum = "",
     totalPages = "",
+    subtitle = "",
+    bodyLines = [],
   } = options
 
+  const font = "'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif"
+
+  // 소제목 + 본문 모드 (subtitle이 있을 때)
+  if (subtitle && bodyLines.length > 0) {
+    const subLines = wrapText(subtitle, 14)
+    const subFontSize = 52
+    const subLineHeight = 72
+
+    // 본문 길이에 따라 폰트 크기/줄바꿈 자동 조절
+    const totalBodyChars = bodyLines.join("").length
+    let bodyFontSize, bodyLineHeight, charsPerLine
+    if (totalBodyChars > 200) {
+      bodyFontSize = 28
+      bodyLineHeight = 44
+      charsPerLine = 22
+    } else if (totalBodyChars > 120) {
+      bodyFontSize = 32
+      bodyLineHeight = 50
+      charsPerLine = 20
+    } else {
+      bodyFontSize = 36
+      bodyLineHeight = 56
+      charsPerLine = 16
+    }
+
+    // 본문을 조절된 글자수로 다시 줄바꿈
+    const fullBody = bodyLines.join("")
+    const rewrapped = wrapText(fullBody, charsPerLine)
+
+    // 사용 가능한 영역: 상단 여백 80 + 하단 페이지 표시 60
+    const availableHeight = height - 160
+    const totalTextHeight =
+      subLines.length * subLineHeight + 40 + rewrapped.length * bodyLineHeight
+
+    // 영역 초과 시 폰트를 더 줄임
+    let finalBodyFontSize = bodyFontSize
+    let finalBodyLineHeight = bodyLineHeight
+    let finalLines = rewrapped
+    if (totalTextHeight > availableHeight) {
+      finalBodyFontSize = 24
+      finalBodyLineHeight = 38
+      finalLines = wrapText(fullBody, 26)
+    }
+
+    const finalTotalHeight =
+      subLines.length * subLineHeight +
+      40 +
+      finalLines.length * finalBodyLineHeight
+    const startY = (height - finalTotalHeight) / 2 + subFontSize
+
+    const subTexts = subLines
+      .map(
+        (line, i) =>
+          `<text x="540" y="${startY + i * subLineHeight}" text-anchor="middle" fill="#FFD700" font-family="${font}" font-size="${subFontSize}" font-weight="800">${escapeXml(line)}</text>`
+      )
+      .join("\n    ")
+
+    const bodyStartY = startY + subLines.length * subLineHeight + 40
+    const bodyTexts = finalLines
+      .map(
+        (line, i) =>
+          `<text x="540" y="${bodyStartY + i * finalBodyLineHeight}" text-anchor="middle" fill="white" font-family="${font}" font-size="${finalBodyFontSize}" font-weight="500">${escapeXml(line)}</text>`
+      )
+      .join("\n    ")
+
+    const pageIndicator = pageNum
+      ? `<text x="540" y="1030" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-family="${font}" font-size="28">${pageNum} / ${totalPages}</text>`
+      : ""
+
+    return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${width}" height="${height}" fill="rgba(0,0,0,0.6)"/>
+    ${subTexts}
+    ${bodyTexts}
+    ${pageIndicator}
+  </svg>`
+  }
+
+  // 기존 모드 (표지, CTA 등)
   const textY = height / 2 - ((lines.length - 1) * lineHeight) / 2
 
   const textLines = lines
     .map(
       (line, i) =>
-        `<text x="540" y="${textY + i * lineHeight}" text-anchor="middle" fill="${isTitle ? "#FFD700" : "white"}" font-family="'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif" font-size="${fontSize}" font-weight="${isTitle ? "800" : "600"}">${escapeXml(line)}</text>`
+        `<text x="540" y="${textY + i * lineHeight}" text-anchor="middle" fill="${isTitle ? "#FFD700" : "white"}" font-family="${font}" font-size="${fontSize}" font-weight="${isTitle ? "800" : "600"}">${escapeXml(line)}</text>`
     )
     .join("\n    ")
 
   const pageIndicator =
     pageNum && !isEnd
-      ? `<text x="540" y="1030" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-family="'Apple SD Gothic Neo', sans-serif" font-size="28">${pageNum} / ${totalPages}</text>`
+      ? `<text x="540" y="1030" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-family="${font}" font-size="28">${pageNum} / ${totalPages}</text>`
       : ""
 
   const brandTag = isEnd
-    ? `<text x="540" y="${textY + lines.length * lineHeight + 40}" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="'Apple SD Gothic Neo', sans-serif" font-size="32">@petpawpaw.zip</text>`
+    ? `<text x="540" y="${textY + lines.length * lineHeight + 40}" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="${font}" font-size="32">@foodlabdiary</text>`
     : ""
 
   return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
@@ -714,53 +792,39 @@ async function generateCardBuffer(bgBuffer, svgStr) {
 }
 
 async function generateCardNews(title, blocks, s3Images, slug) {
-  // 1) gemma3로 핵심 포인트 추출
-  const textContent = blocks
-    .filter((b) => b.type === "paragraph" || b.type === "heading")
-    .map((b) => (b.text || "").replace(/<[^>]+>/g, ""))
-    .join("\n")
-    .slice(0, 3000)
+  // 1) 블록에서 소제목 + 본문 쌍 추출 (AI 호출 없이 DB 데이터 직접 사용)
+  const sections = []
+  let currentHeading = null
 
-  const prompt = `아래 기사를 읽고, 인스타그램 카드뉴스용 스토리를 만들어주세요.
+  for (const block of blocks) {
+    if (block.type === "heading") {
+      currentHeading = (block.text || "").replace(/<[^>]+>/g, "").trim()
+    } else if (block.type === "paragraph" && currentHeading) {
+      const text = (block.text || "").replace(/<[^>]+>/g, "").trim()
+      if (text.length >= 20) {
+        // 본문을 80자로 요약
+        const summary = text
+        sections.push({ subtitle: currentHeading, body: summary })
+        currentHeading = null // 소제목당 하나의 본문만
+      }
+    }
+  }
 
-규칙:
-- 기승전결 구조로 이야기를 전개하세요
-  - 기(도입): 호기심을 끄는 도입부 1~2장
-  - 승(전개): 핵심 정보, 원인, 배경 설명 2~3장
-  - 전(심화): 구체적 사례, 수치, 놀라운 사실 1~2장
-  - 결(마무리): 결론, 교훈, 실천 팁 1장
-- 각 포인트는 20자 이내의 한 문장
-- 전체 3~7개 (기사 내용에 따라 자연스럽게 조절)
-- 앞뒤 포인트가 자연스럽게 연결되어야 합니다
-- 번호를 붙여서 출력 (1. 2. 3. ...)
-- 다른 설명 없이 포인트만 출력
+  // 최대 7장까지
+  const cards = sections.slice(0, 7)
 
-기사 제목: ${title}
-
-기사 본문:
-${textContent}`
-
-  log("📱", "카드뉴스 핵심 포인트 추출 중...")
-  const response = await ollamaGenerate(prompt)
-  const points = response
-    .split("\n")
-    .filter((l) => l.match(/^\d+\./))
-    .map((l) => l.replace(/^\d+\.\s*/, "").trim())
-    .filter((l) => l.length > 0 && l.length <= 25)
-    .slice(0, 7)
-
-  if (points.length === 0) {
-    log("⚠️", "카드뉴스 포인트 추출 실패")
+  if (cards.length === 0) {
+    log("⚠️", "카드뉴스용 소제목+본문 쌍이 없습니다")
     return []
   }
 
-  log("📝", `포인트 ${points.length}개 추출 완료`)
+  log("📝", `소제목+본문 ${cards.length}개 추출 완료`)
 
   // 2) 배경 이미지 다운로드
   const outputDir = resolve(__dirname, "..", "card-news", slug)
   mkdirSync(outputDir, { recursive: true })
 
-  const totalCards = points.length + 2
+  const totalCards = cards.length + 2 // 표지 + 내용 + CTA
   const bgImages = []
   for (const img of s3Images) {
     try {
@@ -770,13 +834,12 @@ ${textContent}`
   }
   log("🖼️", `배경 이미지 ${bgImages.length}장 다운로드 완료`)
 
-  // 배경 이미지를 카드 수만큼 셔플 배분 (표지 + 포인트 + CTA)
+  // 배경 이미지를 카드 수만큼 셔플 배분
   const shuffledBg = [...bgImages]
   for (let i = shuffledBg.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
     ;[shuffledBg[i], shuffledBg[j]] = [shuffledBg[j], shuffledBg[i]]
   }
-  // 카드 수에 맞춰 배경 배열 생성 (이미지 부족하면 순환)
   const bgForCards = []
   for (let i = 0; i < totalCards; i++) {
     if (shuffledBg.length > 0) {
@@ -813,11 +876,14 @@ ${textContent}`
   cardBuffers.push(cover)
   log("🎨", `카드 1/${totalCards}: 표지`)
 
-  // 카드 2~N: 포인트별 (각각 다른 배경 이미지)
-  for (let i = 0; i < points.length; i++) {
-    const svg = buildCardSvg(wrapText(points[i], 13), {
-      fontSize: 56,
-      lineHeight: 80,
+  // 카드 2~N: 소제목 + 본문 요약
+  for (let i = 0; i < cards.length; i++) {
+    const { subtitle, body } = cards[i]
+    const bodyWrapped = wrapText(body, 16)
+
+    const svg = buildCardSvg([], {
+      subtitle,
+      bodyLines: bodyWrapped,
       pageNum: String(i + 2),
       totalPages: String(totalCards),
     })
@@ -834,19 +900,16 @@ ${textContent}`
     const num = String(i + 2).padStart(2, "0")
     writeFileSync(resolve(outputDir, `${num}-point.jpg`), card)
     cardBuffers.push(card)
-    log("🎨", `카드 ${i + 2}/${totalCards}: ${points[i].slice(0, 30)}...`)
+    log("🎨", `카드 ${i + 2}/${totalCards}: ${subtitle.slice(0, 20)}`)
   }
 
   // 마지막 카드: CTA
-  const endSvg = buildCardSvg(["더 많은 반려동물 이야기", "petpawpaw.net"], {
+  const endSvg = buildCardSvg(["더 많은 반려동물 이야기", "foodlabdiary.com"], {
     fontSize: 52,
     lineHeight: 78,
     isEnd: true,
   })
-  const lastCard = await generateCardBuffer(
-    bgForCards[totalCards - 1],
-    endSvg
-  )
+  const lastCard = await generateCardBuffer(bgForCards[totalCards - 1], endSvg)
   writeFileSync(
     resolve(outputDir, `${String(totalCards).padStart(2, "0")}-end.jpg`),
     lastCard
@@ -963,7 +1026,7 @@ async function postToInstagram(cardUrls, title, slug) {
   }
 
   // 3) 캐러셀 컨테이너 생성
-  const caption = `${title}\n\n🐾 더 많은 반려동물 이야기 → petpawpaw.net\n\n#반려동물 #강아지 #고양이 #펫 #반려견 #petpawpaw`
+  const caption = `${title}\n\n🐾 더 많은 반려동물 이야기 → foodlabdiary.com\n\n#반려동물 #강아지 #고양이 #펫 #반려견 #foodlabdiary`
   const carousel = await igApiCall(`/${userId}/media`, {
     media_type: "CAROUSEL",
     children: itemIds.join(","),
@@ -986,24 +1049,33 @@ async function googlePost(url, body, accessToken) {
   const postData = JSON.stringify(body)
 
   return new Promise((resolve, reject) => {
-    const req = https.request(u, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(postData),
+    const req = https.request(
+      u,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(postData),
+        },
       },
-    }, (res) => {
-      let data = ""
-      res.on("data", (c) => (data += c))
-      res.on("end", () => {
-        try {
-          const json = JSON.parse(data)
-          if (json.error) reject(new Error(json.error.message || JSON.stringify(json.error)))
-          else resolve(json)
-        } catch { reject(new Error(data)) }
-      })
-    })
+      (res) => {
+        let data = ""
+        res.on("data", (c) => (data += c))
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data)
+            if (json.error)
+              reject(
+                new Error(json.error.message || JSON.stringify(json.error))
+              )
+            else resolve(json)
+          } catch {
+            reject(new Error(data))
+          }
+        })
+      }
+    )
     req.on("error", reject)
     req.write(postData)
     req.end()
@@ -1012,16 +1084,25 @@ async function googlePost(url, body, accessToken) {
 
 async function googleGet(url, accessToken) {
   return new Promise((resolve, reject) => {
-    https.get(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }, (res) => {
-      let data = ""
-      res.on("data", (c) => (data += c))
-      res.on("end", () => {
-        try { resolve(JSON.parse(data)) }
-        catch { reject(new Error(data)) }
-      })
-    }).on("error", reject)
+    https
+      .get(
+        url,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+        (res) => {
+          let data = ""
+          res.on("data", (c) => (data += c))
+          res.on("end", () => {
+            try {
+              resolve(JSON.parse(data))
+            } catch {
+              reject(new Error(data))
+            }
+          })
+        }
+      )
+      .on("error", reject)
   })
 }
 
@@ -1034,23 +1115,30 @@ async function getGoogleAccessToken() {
   }).toString()
 
   return new Promise((resolve, reject) => {
-    const req = https.request("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Content-Length": Buffer.byteLength(postData),
+    const req = https.request(
+      "https://oauth2.googleapis.com/token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Length": Buffer.byteLength(postData),
+        },
       },
-    }, (res) => {
-      let body = ""
-      res.on("data", (c) => (body += c))
-      res.on("end", () => {
-        try {
-          const json = JSON.parse(body)
-          if (json.error) reject(new Error(json.error_description || json.error))
-          else resolve(json.access_token)
-        } catch { reject(new Error(body)) }
-      })
-    })
+      (res) => {
+        let body = ""
+        res.on("data", (c) => (body += c))
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(body)
+            if (json.error)
+              reject(new Error(json.error_description || json.error))
+            else resolve(json.access_token)
+          } catch {
+            reject(new Error(body))
+          }
+        })
+      }
+    )
     req.on("error", reject)
     req.write(postData)
     req.end()
@@ -1058,25 +1146,29 @@ async function getGoogleAccessToken() {
 }
 
 function blocksToHtml(blocks) {
-  return blocks.map((block) => {
-    switch (block.type) {
-      case "paragraph":
-        return `<p>${block.text || ""}</p>`
-      case "heading":
-        if (block.level === 3) return `<h3>${block.text || ""}</h3>`
-        return `<h2>${block.text || ""}</h2>`
-      case "image":
-        return `<div style="text-align:center;margin:20px 0"><img src="${block.url}" alt="${block.alt || ""}" style="max-width:100%;border-radius:8px" />${block.caption ? `<p style="font-size:0.85em;color:#888">${block.caption}</p>` : ""}</div>`
-      case "quote":
-        return `<blockquote style="border-left:3px solid #ccc;padding-left:16px;color:#555;font-style:italic">${block.text || ""}</blockquote>`
-      case "list":
-        const tag = block.ordered ? "ol" : "ul"
-        const items = (block.items || []).map((item) => `<li>${item}</li>`).join("")
-        return `<${tag}>${items}</${tag}>`
-      default:
-        return ""
-    }
-  }).join("\n")
+  return blocks
+    .map((block) => {
+      switch (block.type) {
+        case "paragraph":
+          return `<p>${block.text || ""}</p>`
+        case "heading":
+          if (block.level === 3) return `<h3>${block.text || ""}</h3>`
+          return `<h2>${block.text || ""}</h2>`
+        case "image":
+          return `<div style="text-align:center;margin:20px 0"><img src="${block.url}" alt="${block.alt || ""}" style="max-width:100%;border-radius:8px" />${block.caption ? `<p style="font-size:0.85em;color:#888">${block.caption}</p>` : ""}</div>`
+        case "quote":
+          return `<blockquote style="border-left:3px solid #ccc;padding-left:16px;color:#555;font-style:italic">${block.text || ""}</blockquote>`
+        case "list":
+          const tag = block.ordered ? "ol" : "ul"
+          const items = (block.items || [])
+            .map((item) => `<li>${item}</li>`)
+            .join("")
+          return `<${tag}>${items}</${tag}>`
+        default:
+          return ""
+      }
+    })
+    .join("\n")
 }
 
 async function postToBlogger(title, blocks, slug) {
@@ -1134,13 +1226,22 @@ async function postToFacebook(cardUrls, title, slug) {
   // 직접 페이지 토큰 요청
   if (targetId) {
     const pageData = await new Promise((resolve, reject) => {
-      https.get(`${FB_API}/${targetId}?fields=id,name,access_token&access_token=${userToken}`, (res) => {
-        let body = ""
-        res.on("data", (c) => (body += c))
-        res.on("end", () => {
-          try { resolve(JSON.parse(body)) } catch { reject(new Error(body)) }
-        })
-      }).on("error", reject)
+      https
+        .get(
+          `${FB_API}/${targetId}?fields=id,name,access_token&access_token=${userToken}`,
+          (res) => {
+            let body = ""
+            res.on("data", (c) => (body += c))
+            res.on("end", () => {
+              try {
+                resolve(JSON.parse(body))
+              } catch {
+                reject(new Error(body))
+              }
+            })
+          }
+        )
+        .on("error", reject)
     })
     if (pageData.error) throw new Error(pageData.error.message)
     pageId = pageData.id
@@ -1149,13 +1250,22 @@ async function postToFacebook(cardUrls, title, slug) {
   } else {
     // FACEBOOK_PAGE_ID 미설정 시 /me/accounts 첫 번째 사용
     const accounts = await new Promise((resolve, reject) => {
-      https.get(`${FB_API}/me/accounts?fields=id,name,access_token&access_token=${userToken}`, (res) => {
-        let body = ""
-        res.on("data", (c) => (body += c))
-        res.on("end", () => {
-          try { resolve(JSON.parse(body)) } catch { reject(new Error(body)) }
-        })
-      }).on("error", reject)
+      https
+        .get(
+          `${FB_API}/me/accounts?fields=id,name,access_token&access_token=${userToken}`,
+          (res) => {
+            let body = ""
+            res.on("data", (c) => (body += c))
+            res.on("end", () => {
+              try {
+                resolve(JSON.parse(body))
+              } catch {
+                reject(new Error(body))
+              }
+            })
+          }
+        )
+        .on("error", reject)
     })
     if (!accounts.data || accounts.data.length === 0) {
       log("⚠️", "연결된 Facebook Page가 없습니다")
@@ -1201,13 +1311,16 @@ async function postToFacebook(cardUrls, title, slug) {
   }
 
   // 3) 멀티 이미지 게시물 생성
-  const message = `${title}\n\n🐾 더 많은 반려동물 이야기 → petpawpaw.net\n\n#반려동물 #강아지 #고양이 #펫 #반려견 #petpawpaw`
+  const message = `${title}\n\n🐾 더 많은 반려동물 이야기 → foodlabdiary.com\n\n#반려동물 #강아지 #고양이 #펫 #반려견 #foodlabdiary`
 
   const feedUrl = new URL(`${FB_API}/${pageId}/feed`)
   feedUrl.searchParams.set("access_token", pageToken)
   feedUrl.searchParams.set("message", message)
   photoIds.forEach((id, i) => {
-    feedUrl.searchParams.set(`attached_media[${i}]`, JSON.stringify({ media_fbid: id }))
+    feedUrl.searchParams.set(
+      `attached_media[${i}]`,
+      JSON.stringify({ media_fbid: id })
+    )
   })
 
   const published = await new Promise((resolve, reject) => {
@@ -1288,7 +1401,7 @@ function markComplete(url) {
 
 async function processOne(url, categorySlug) {
   console.log("═══════════════════════════════════════════")
-  console.log("  pawpaw 포스트 자동 생성")
+  console.log("  foodlabdiary 포스트 자동 생성")
   console.log("═══════════════════════════════════════════\n")
 
   // Step 1: 원문 가져오기
@@ -1365,15 +1478,12 @@ ${altList}`
 
   // Step 5: 블록 변환
   const blocks = markdownToBlocks(newBody, s3Images)
-  const excerpt =
-    blocks.find((b) => b.type === "paragraph")?.text?.slice(0, 200) || ""
   log("🧱", `블록 변환 완료: ${blocks.length}개 블록\n`)
 
   // Step 6: DB 삽입
   log("💾", "Supabase DB 저장 중...")
   const post = await insertPost(
     newTitle,
-    excerpt,
     blocks,
     s3Images,
     finalCategory
@@ -1422,6 +1532,8 @@ ${altList}`
   console.log("═══════════════════════════════════════════\n")
 }
 
+const INTERVAL_MS = 120 * 60 * 1000 // 120분
+
 async function main() {
   const singleUrl = process.argv[2]
   const categorySlug = process.argv[3]
@@ -1432,10 +1544,26 @@ async function main() {
     return
   }
 
-  // 랜덤 모드: 1개만 처리
-  const url = pickRandomUrl()
-  console.log(`\n🔄 ${url}\n`)
-  await processOne(url, categorySlug)
+  // 랜덤 모드: 20분 간격 반복
+  let round = 1
+  while (true) {
+    const url = pickRandomUrl() // 남은 URL 없으면 내부에서 exit
+    console.log(`\n🔄 [${round}회차] ${url}\n`)
+
+    try {
+      await processOne(url, categorySlug)
+    } catch (err) {
+      log("⚠️", `처리 실패: ${err.message || err}`)
+      markComplete(url) // 실패해도 스킵하고 다음으로
+    }
+
+    round++
+    log(
+      "⏳",
+      `다음 포스트까지 20분 대기... (${new Date().toLocaleTimeString("ko-KR")})`
+    )
+    await sleep(INTERVAL_MS)
+  }
 }
 
 main().catch((err) => {

@@ -1,5 +1,5 @@
 export function GET() {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://petpawpaw.net"
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://foodlabdiary.com"
 
   const body = `User-Agent: *
 Allow: /

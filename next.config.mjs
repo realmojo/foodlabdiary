@@ -4,15 +4,15 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "petpawpaw.s3.amazonaws.com",
+        hostname: "foodlabdiary.s3.amazonaws.com",
       },
       {
         protocol: "https",
-        hostname: "petpawpaw.s3.*.amazonaws.com",
+        hostname: "foodlabdiary.s3.*.amazonaws.com",
       },
       {
         protocol: "https",
-        hostname: "petpawpaw.s3.ap-northeast-2.amazonaws.com",
+        hostname: "foodlabdiary.s3.ap-northeast-2.amazonaws.com",
       },
     ],
   },

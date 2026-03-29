@@ -94,7 +94,7 @@ function buildCardSvg(lines, options = {}) {
       : ""
 
   const brandTag = isEnd
-    ? `<text x="540" y="${textY + lines.length * lineHeight + 40}" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="'Apple SD Gothic Neo', sans-serif" font-size="32">@petpawpaw.zip</text>`
+    ? `<text x="540" y="${textY + lines.length * lineHeight + 40}" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="'Apple SD Gothic Neo', sans-serif" font-size="32">@foodlabdiary</text>`
     : ""
 
   return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
@@ -173,7 +173,7 @@ async function main() {
   }
 
   // 마지막 카드: CTA
-  const endSvg = buildCardSvg(["더 많은 반려동물 이야기", "petpawpaw.net"], {
+  const endSvg = buildCardSvg(["더 많은 반려동물 이야기", "foodlabdiary.com"], {
     fontSize: 52,
     lineHeight: 78,
     isEnd: true,

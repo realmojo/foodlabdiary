@@ -3,7 +3,7 @@ import { Separator } from "@/components/ui/separator"
 
 export const metadata: Metadata = {
   title: "개인정보처리방침",
-  description: "pawpaw 개인정보처리방침",
+  description: "푸드랩다이어리 개인정보처리방침",
   alternates: { canonical: "/privacy" },
 }
 
@@ -12,7 +12,7 @@ export default function PrivacyPage() {
     <div className="mx-auto max-w-3xl px-4 py-12">
       <h1 className="text-2xl font-bold">개인정보처리방침</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        시행일: 2026년 3월 25일
+        시행일: 2026년 3월 29일
       </p>
 
       <Separator className="my-6" />
@@ -20,7 +20,7 @@ export default function PrivacyPage() {
       <div className="space-y-8 text-[15px] leading-relaxed text-muted-foreground">
         <section>
           <p>
-            pawpaw(이하 "서비스")는 이용자의 개인정보를 중요시하며, 「개인정보
+            푸드랩다이어리(이하 "서비스")는 이용자의 개인정보를 중요시하며, 「개인정보
             보호법」 등 관련 법규를 준수합니다. 본 개인정보처리방침을 통해
             이용자의 개인정보가 어떤 용도와 방식으로 이용되고 있으며, 어떤 보호
             조치가 취해지고 있는지 알려드립니다.
@@ -109,7 +109,7 @@ export default function PrivacyPage() {
           <p>
             이용자는 언제든지 자신의 개인정보에 대해 열람, 수정, 삭제를 요청할
             수 있으며, 개인정보 처리에 대한 동의를 철회할 수 있습니다. 관련
-            요청은 이메일(hello@petpawpaw.net)로 연락해주세요.
+            요청은 이메일(strikers1999@kakao.com)로 연락해주세요.
           </p>
         </section>
 
@@ -118,8 +118,8 @@ export default function PrivacyPage() {
             8. 개인정보 보호책임자
           </h2>
           <ul className="list-none space-y-1">
-            <li>담당: pawpaw 운영팀</li>
-            <li>이메일: hello@petpawpaw.net</li>
+            <li>담당: 푸드랩다이어리 운영팀</li>
+            <li>이메일: strikers1999@kakao.com</li>
           </ul>
         </section>
       </div>

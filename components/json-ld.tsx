@@ -1,11 +1,11 @@
 import type { Post, Category, ContentBlock } from "@/lib/data"
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://petpawpaw.net"
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://foodlabdiary.com"
 
 const PUBLISHER = {
   "@type": "Organization" as const,
   "@id": `${SITE_URL}/#organization`,
-  name: "포우포우",
+  name: "푸드랩다이어리",
   url: SITE_URL,
   logo: {
     "@type": "ImageObject" as const,
@@ -24,7 +24,7 @@ export function WebsiteJsonLd() {
       {
         "@type": "Organization",
         "@id": `${SITE_URL}/#organization`,
-        name: "포우포우",
+        name: "푸드랩다이어리",
         url: SITE_URL,
         logo: {
           "@type": "ImageObject",
@@ -38,10 +38,10 @@ export function WebsiteJsonLd() {
       {
         "@type": "WebSite",
         "@id": `${SITE_URL}/#website`,
-        name: "포우포우",
+        name: "푸드랩다이어리",
         url: SITE_URL,
         description:
-          "강아지, 고양이, 반려동물과 함께하는 더 나은 일상을 위한 정보 매거진",
+          "건강한 식생활을 위한 영양·식단 정보 매거진",
         inLanguage: "ko-KR",
         publisher: { "@id": `${SITE_URL}/#organization` },
         potentialAction: {
@@ -76,7 +76,7 @@ export function ArticleJsonLd({ post }: { post: Post }) {
     "@type": "Article",
     "@id": `${postUrl}/#article`,
     headline: post.title,
-    description: post.excerpt?.replace(/<[^>]*>/g, ""),
+    description: post.content?.find((b: ContentBlock) => b.type === "paragraph")?.text?.replace(/<[^>]*>/g, ""),
     url: postUrl,
     datePublished: post.published_at,
     dateModified: post.updated_at,
@@ -106,7 +106,8 @@ export function ArticleJsonLd({ post }: { post: Post }) {
     keywords: [...new Set([
       post.primary_category?.name,
       ...(post.categories?.map((c) => c.name) ?? []),
-      "반려동물",
+      "건강",
+      "식단",
     ].filter(Boolean))].join(", "),
     speakable: {
       "@type": "SpeakableSpecification",

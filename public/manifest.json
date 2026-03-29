@@ -1,11 +1,11 @@
 {
-  "name": "포우포우 - 반려동물 정보 매거진",
-  "short_name": "포우포우",
-  "description": "강아지, 고양이, 반려동물과 함께하는 더 나은 일상을 위한 정보 매거진",
+  "name": "푸드랩다이어리 - 건강·식단 정보 매거진",
+  "short_name": "푸드랩다이어리",
+  "description": "건강한 식생활을 위한 영양·식단 정보 매거진",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#F59E0B",
+  "theme_color": "#16A34A",
   "orientation": "portrait-primary",
   "lang": "ko",
   "icons": [
