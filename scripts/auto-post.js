@@ -275,10 +275,12 @@ async function enrichContents(title, contents) {
   log("🖼️", "imagePrompt 생성 중...")
   for (let i = 0; i < contents.length; i++) {
     const subject = contents[i].title || title
-    const promptReq = `아래 주제에 맞는 AI 이미지 생성 프롬프트를 한국어 한 문장으로 만들어주세요.
+    const body = contents[i].text || ""
+    const promptReq = `아래 소제목과 본문 내용을 참고하여, 내용에 어울리는 AI 이미지 생성 프롬프트를 한국어 한 문장으로 만들어주세요.
 사실적이고 고품질의 음식/건강 사진 스타일. 한 문장만 출력하세요.
 
-주제: ${subject}`
+소제목: ${subject}
+본문: ${body.slice(0, 200)}`
 
     const imgRes = await ollama.generate({
       model: "qwen2.5",
