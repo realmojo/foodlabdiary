@@ -101,6 +101,11 @@ export default function RootLayout({
           href="/rss.xml"
         />
         <Script
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1963334904140891"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
+        <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-Y0GVNHGVDC"
           strategy="afterInteractive"
         />
